@@ -80,3 +80,19 @@ export const unfollowUser = async (followerId: string, followingId: string): Pro
     return false;
   }
 };
+
+export const getUserById = async (userId: string): Promise<UserProfile | null> => {
+  try {
+    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+
+    if (error) {
+      console.error('Error fetching user:', error);
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Error in getUserById:', error);
+    throw error;
+  }
+};

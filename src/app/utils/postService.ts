@@ -98,3 +98,39 @@ export const createPost = async (
     return null;
   }
 };
+
+export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching posts:', error);
+      throw error;
+    }
+
+    return data || [];
+  } catch (error) {
+    console.error('Error in getPostsByUserId:', error);
+    throw error;
+  }
+};
+
+export const deletePost = async (postId: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase.from('posts').delete().eq('id', postId);
+
+    if (error) {
+      console.error('Error deleting post:', error);
+      throw error;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error in deletePost:', error);
+    throw error;
+  }
+};
