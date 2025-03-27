@@ -1,31 +1,39 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
+import { useState } from 'react';
 import { UserProfile } from '../utils/userService';
 import { followUser, unfollowUser } from '../utils/userService';
 
 interface UserCardProps {
   user: UserProfile;
   currentUserId?: string;
-  onFollowStatusChange: () => void;
+  onFollowStatusChange?: () => void;
 }
 
 const UserCard = ({ user, currentUserId, onFollowStatusChange }: UserCardProps) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(user.is_following || false);
   const canFollow = currentUserId && currentUserId !== user.id;
 
   const handleFollowToggle = async () => {
-    if (!currentUserId) return;
+    if (!canFollow || isLoading || !currentUserId) return;
 
     setIsLoading(true);
     try {
-      if (user.is_following) {
-        await unfollowUser(currentUserId, user.id);
+      if (isFollowing) {
+        const success = await unfollowUser(currentUserId, user.id);
+        if (success) {
+          setIsFollowing(false);
+          onFollowStatusChange?.();
+        }
       } else {
-        await followUser(currentUserId, user.id);
+        const success = await followUser(currentUserId, user.id);
+        if (success) {
+          setIsFollowing(true);
+          onFollowStatusChange?.();
+        }
       }
-      onFollowStatusChange();
     } catch (error) {
       console.error('Error toggling follow status:', error);
     } finally {
@@ -34,34 +42,50 @@ const UserCard = ({ user, currentUserId, onFollowStatusChange }: UserCardProps) 
   };
 
   return (
-    <div className='bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6'>
-      <div className='flex items-center justify-between'>
-        <Link href={`/users/${user.id}`} className='flex items-center space-x-4 flex-1'>
-          <img
-            src={user.avatar_url || '/default-avatar.png'}
-            alt={`${user.username}'s avatar`}
-            className='w-12 h-12 rounded-full object-cover'
-          />
-          <div>
-            <h3 className='font-semibold text-gray-900 dark:text-white'>{user.username}</h3>
-            <p className='text-sm text-gray-500 dark:text-gray-400'>{user.email}</p>
+    <div className='flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors'>
+      <div className='flex items-center space-x-3'>
+        <Link href={`/users/${user.id}`} className='block group'>
+          <div className='h-12 w-12 rounded-full overflow-hidden relative bg-gray-200 dark:bg-gray-700'>
+            {user.avatar_url ? (
+              <img
+                src={user.avatar_url}
+                alt={user.username}
+                width={48}
+                height={48}
+                className='object-cover'
+              />
+            ) : (
+              <div className='w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-600'>
+                <span className='text-gray-500 dark:text-gray-400 text-lg'>
+                  {user.username.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
           </div>
         </Link>
-        {canFollow && (
-          <button
-            onClick={handleFollowToggle}
-            disabled={isLoading}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              user.is_following
-                ? 'bg-red-500 text-white hover:bg-red-600'
-                : 'bg-blue-500 text-white hover:bg-blue-600'
-            }`}
-            aria-label={user.is_following ? 'Unfollow user' : 'Follow user'}
+        <div>
+          <Link
+            href={`/users/${user.id}`}
+            className='font-bold text-gray-900 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 transition-colors'
           >
-            {isLoading ? 'Loading...' : user.is_following ? 'Unfollow' : 'Follow'}
-          </button>
-        )}
+            {user.username}
+          </Link>
+          <p className='text-sm text-gray-500 dark:text-gray-400'>{user.email}</p>
+        </div>
       </div>
+      {canFollow && (
+        <button
+          onClick={handleFollowToggle}
+          disabled={isLoading}
+          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+            isFollowing
+              ? 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+              : 'bg-blue-500 text-white hover:bg-blue-600'
+          } disabled:opacity-50 disabled:cursor-not-allowed`}
+        >
+          {isLoading ? 'Loading...' : isFollowing ? 'Unfollow' : 'Follow'}
+        </button>
+      )}
     </div>
   );
 };
