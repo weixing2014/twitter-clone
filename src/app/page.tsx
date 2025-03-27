@@ -1,80 +1,63 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from './context/AuthContext';
+import { Post } from './types/post';
+import { getPosts } from './utils/postService';
 import ComposePost from './components/ComposePost';
 import PostsSection from './components/PostsSection';
-import { getPosts, getFollowingPosts, Post as PostType } from './utils/postService';
+import PostCard from './components/PostCard';
 
-export default function Home() {
-  const [posts, setPosts] = useState<PostType[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+export default function HomePage() {
   const { user } = useAuth();
-  const currentUserId = user?.id;
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const loadFeed = async () => {
-    setIsLoading(true);
-    let feed: PostType[] = [];
-
-    if (currentUserId) {
-      // Get both following posts and current user's posts
-      const followingPosts = await getFollowingPosts(currentUserId);
-
-      // Get all posts
-      const allPosts = await getPosts();
-
-      // Filter to include only current user's posts
-      const userPosts = allPosts.filter((post) => post.user_id === currentUserId);
-
-      // Combine and sort by date (newest first)
-      feed = [...followingPosts, ...userPosts].sort(
-        (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-
-      // Remove any duplicates (in case current user follows themselves)
-      feed = feed.filter((post, index, self) => index === self.findIndex((p) => p.id === post.id));
-    } else {
-      // For non-logged in users, just show all posts
-      feed = await getPosts();
+  const loadPosts = async () => {
+    try {
+      const fetchedPosts = await getPosts(user?.id);
+      setPosts(fetchedPosts);
+    } catch (error) {
+      console.error('Error loading posts:', error);
+    } finally {
+      setLoading(false);
     }
-
-    setPosts(feed);
-    setIsLoading(false);
   };
 
   useEffect(() => {
-    loadFeed();
-  }, [currentUserId]);
+    loadPosts();
+  }, [user]);
 
-  const handlePostCreated = () => {
-    loadFeed();
+  const handlePostCreated = (newPost: Post) => {
+    setPosts((prevPosts) => [newPost, ...prevPosts]);
   };
 
   const handlePostDeleted = (postId: string) => {
     setPosts((prevPosts) => prevPosts.filter((post) => post.id !== postId));
   };
 
-  return (
-    <main className='max-w-2xl mx-auto'>
-      <div className='px-4 py-3 border-b border-gray-200 dark:border-gray-800'>
-        <h2 className='text-xl font-bold text-gray-900 dark:text-white'>Home</h2>
+  if (loading) {
+    return (
+      <div className='flex items-center justify-center min-h-screen'>
+        <div className='animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500'></div>
       </div>
+    );
+  }
 
-      {/* Compose Post Area (only shown to logged-in users) */}
-      <ComposePost onPostCreated={handlePostCreated} />
-
-      {/* Posts List */}
+  return (
+    <div className='max-w-2xl mx-auto'>
+      {user && <ComposePost onPostCreated={handlePostCreated} />}
       <PostsSection
         posts={posts}
-        isLoading={isLoading}
-        currentUserId={currentUserId}
+        isLoading={loading}
+        currentUserId={user?.id || ''}
         onPostDeleted={handlePostDeleted}
         emptyMessage={
-          !currentUserId
+          !user
             ? 'Sign in to create posts and join the conversation!'
             : 'No posts found. Create a post or follow users to see their posts here!'
         }
       />
-    </main>
+    </div>
   );
 }

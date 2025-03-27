@@ -4,5 +4,6 @@ export interface Post {
   user_id: string;
   username: string;
   avatar_url?: string;
+  image_urls?: string[];
   created_at: string;
 }

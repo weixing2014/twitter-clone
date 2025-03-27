@@ -65,7 +65,7 @@ const CommentSection = ({ postId, currentUserId, onCommentChange }: CommentSecti
         <button
           type='submit'
           disabled={isLoading || !newComment.trim()}
-          className='px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed'
+          className='px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer'
         >
           {isLoading ? 'Posting...' : 'Post'}
         </button>
@@ -75,7 +75,7 @@ const CommentSection = ({ postId, currentUserId, onCommentChange }: CommentSecti
         {comments.map((comment) => (
           <div key={comment.id} className='flex space-x-3'>
             <div className='flex-shrink-0'>
-              <Link href={`/users/${comment.user_id}`} className='block group'>
+              <Link href={`/users/${comment.user_id}`} className='block group cursor-pointer'>
                 <div className='h-8 w-8 rounded-full overflow-hidden relative bg-gray-200 dark:bg-gray-700'>
                   <Image
                     src={
@@ -96,7 +96,7 @@ const CommentSection = ({ postId, currentUserId, onCommentChange }: CommentSecti
                 <div className='flex items-center space-x-1'>
                   <Link
                     href={`/users/${comment.user_id}`}
-                    className='font-bold text-gray-900 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 transition-colors'
+                    className='font-bold text-gray-900 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer'
                   >
                     {comment.username}
                   </Link>
@@ -110,7 +110,7 @@ const CommentSection = ({ postId, currentUserId, onCommentChange }: CommentSecti
                 {currentUserId === comment.user_id && (
                   <button
                     onClick={() => handleDelete(comment.id)}
-                    className='text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1'
+                    className='text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1 cursor-pointer'
                     aria-label='Delete comment'
                   >
                     <svg

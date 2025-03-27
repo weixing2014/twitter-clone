@@ -134,7 +134,7 @@ export default function SignIn() {
       <div className='flex mb-6'>
         <button
           onClick={() => setIsSignUp(false)}
-          className={`flex-1 text-center py-2 border-b-2 font-medium transition-colors ${
+          className={`flex-1 text-center py-2 border-b-2 font-medium transition-colors cursor-pointer ${
             !isSignUp
               ? 'border-blue-500 text-blue-500'
               : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -146,7 +146,7 @@ export default function SignIn() {
         </button>
         <button
           onClick={() => setIsSignUp(true)}
-          className={`flex-1 text-center py-2 border-b-2 font-medium transition-colors ${
+          className={`flex-1 text-center py-2 border-b-2 font-medium transition-colors cursor-pointer ${
             isSignUp
               ? 'border-blue-500 text-blue-500'
               : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -239,7 +239,7 @@ export default function SignIn() {
         <button
           type='submit'
           disabled={isLoading}
-          className='w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+          className='w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
           aria-label={isSignUp ? 'Sign up' : 'Sign in'}
         >
           {isLoading
@@ -269,7 +269,7 @@ export default function SignIn() {
             type='button'
             onClick={handleGoogleSignIn}
             disabled={isLoading}
-            className='w-full flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors'
+            className='w-full flex items-center justify-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors cursor-pointer'
             aria-label='Sign in with Google'
           >
             <svg className='h-5 w-5 mr-2' viewBox='0 0 24 24'>

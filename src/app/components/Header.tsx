@@ -27,13 +27,17 @@ const Header = () => {
       <div className='max-w-6xl mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between items-center h-16'>
           <div className='flex items-center space-x-4'>
-            <Link href='/' className='text-xl font-bold text-blue-500' aria-label='Home'>
+            <Link
+              href='/'
+              className='text-xl font-bold text-blue-500 cursor-pointer'
+              aria-label='Home'
+            >
               OhYea
             </Link>
             <nav className='hidden md:flex space-x-2'>
               <Link
                 href='/'
-                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer ${
                   pathname === '/'
                     ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -44,7 +48,7 @@ const Header = () => {
               </Link>
               <Link
                 href='/users'
-                className={`px-3 py-2 rounded-md text-sm font-medium ${
+                className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer ${
                   pathname === '/users'
                     ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20'
                     : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -65,7 +69,7 @@ const Header = () => {
                 <button
                   onClick={handleSignOut}
                   onKeyDown={handleKeyDown}
-                  className='px-4 py-2 rounded-full bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors'
+                  className='px-4 py-2 rounded-full bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors cursor-pointer'
                   tabIndex={0}
                   aria-label='Sign out'
                   disabled={isLoading}
@@ -76,7 +80,7 @@ const Header = () => {
             ) : (
               <Link
                 href='/signin'
-                className='px-4 py-2 rounded-full bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors'
+                className='px-4 py-2 rounded-full bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors cursor-pointer'
                 aria-label='Sign in'
               >
                 Sign in

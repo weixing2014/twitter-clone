@@ -66,7 +66,7 @@ const UserCard = ({ user, currentUserId, onFollowStatusChange }: UserCardProps) 
         <div>
           <Link
             href={`/users/${user.id}`}
-            className='font-bold text-gray-900 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 transition-colors'
+            className='font-bold text-gray-900 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer'
           >
             {user.username}
           </Link>
@@ -77,7 +77,7 @@ const UserCard = ({ user, currentUserId, onFollowStatusChange }: UserCardProps) 
         <button
           onClick={handleFollowToggle}
           disabled={isLoading}
-          className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+          className={`px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer ${
             isFollowing
               ? 'bg-gray-200 text-gray-700 hover:bg-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
               : 'bg-blue-500 text-white hover:bg-blue-600'

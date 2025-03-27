@@ -11,21 +11,33 @@ import CommentSection from './CommentSection';
 
 interface PostCardProps {
   post: Post;
-  currentUserId?: string;
-  onPostDeleted?: (postId: string) => void;
+  currentUserId: string;
+  onPostDeleted: (postId: string) => void;
 }
 
-const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
+export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const formattedDate = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
   const isCurrentUserPost = currentUserId === post.user_id;
 
   useEffect(() => {
     loadCommentCount();
   }, [post.id]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedImage) {
+        setSelectedImage(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedImage]);
 
   const loadCommentCount = async () => {
     const count = await getCommentCount(post.id);
@@ -38,7 +50,7 @@ const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
     setIsDeleting(true);
     try {
       await deletePost(post.id);
-      onPostDeleted?.(post.id);
+      onPostDeleted(post.id);
     } catch (error) {
       console.error('Error deleting post:', error);
     } finally {
@@ -47,11 +59,15 @@ const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
     }
   };
 
+  const handleImageClick = (imageUrl: string) => {
+    setSelectedImage(imageUrl);
+  };
+
   return (
     <article className='border-b border-gray-200 dark:border-gray-800 p-4 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors'>
       <div className='flex space-x-3'>
         <div className='flex-shrink-0'>
-          <Link href={`/users/${post.user_id}`} className='block group'>
+          <Link href={`/users/${post.user_id}`} className='block group cursor-pointer'>
             <div className='h-12 w-12 rounded-full overflow-hidden relative bg-gray-200 dark:bg-gray-700'>
               <Image
                 src={
@@ -71,7 +87,7 @@ const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
           <div className='flex items-center space-x-1'>
             <Link
               href={`/users/${post.user_id}`}
-              className='font-bold text-gray-900 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 transition-colors'
+              className='font-bold text-gray-900 dark:text-white hover:text-blue-500 dark:hover:text-blue-400 transition-colors cursor-pointer'
             >
               {post.username}
             </Link>
@@ -85,7 +101,7 @@ const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
             <div className='flex items-center space-x-2 ml-4'>
               <button
                 onClick={() => setShowComments(!showComments)}
-                className='text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1 flex items-center space-x-1'
+                className='text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1 flex items-center space-x-1 cursor-pointer'
                 aria-label='Toggle comments'
               >
                 <svg
@@ -109,7 +125,7 @@ const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
               {isCurrentUserPost && (
                 <button
                   onClick={() => setShowConfirmDialog(true)}
-                  className='text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1'
+                  className='text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors p-1 cursor-pointer'
                   aria-label='Delete post'
                 >
                   <svg
@@ -130,6 +146,23 @@ const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
               )}
             </div>
           </div>
+          {post.image_urls && post.image_urls.length > 0 && (
+            <div className='mt-2 grid grid-cols-4 gap-1'>
+              {post.image_urls.map((imageUrl, index) => (
+                <div
+                  key={index}
+                  className='aspect-square rounded-lg overflow-hidden group cursor-pointer'
+                >
+                  <img
+                    src={imageUrl}
+                    alt={`Post image ${index + 1}`}
+                    className='w-full h-full object-cover transition-transform group-hover:scale-105'
+                    onClick={() => handleImageClick(imageUrl)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
           {showComments && (
             <div className='mt-4 border-t border-gray-200 dark:border-gray-800 pt-4'>
               <CommentSection
@@ -155,18 +188,50 @@ const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
             <div className='flex justify-end space-x-3'>
               <button
                 onClick={() => setShowConfirmDialog(false)}
-                className='px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors'
+                className='px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer'
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
                 disabled={isDeleting}
-                className='px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+                className='px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer'
               >
                 {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div
+          className='fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center p-4'
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className='relative max-w-4xl w-full max-h-[90vh]'>
+            <img
+              src={selectedImage}
+              alt='Full size post image'
+              className='w-full h-full object-contain'
+            />
+            <button
+              onClick={() => setSelectedImage(null)}
+              className='absolute top-4 right-4 p-2 bg-black bg-opacity-50 text-white rounded-full hover:bg-opacity-75 transition-colors'
+              aria-label='Close image preview'
+            >
+              <svg
+                xmlns='http://www.w3.org/2000/svg'
+                fill='none'
+                viewBox='0 0 24 24'
+                strokeWidth={1.5}
+                stroke='currentColor'
+                className='w-6 h-6'
+              >
+                <path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12' />
+              </svg>
+            </button>
           </div>
         </div>
       )}
