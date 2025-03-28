@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { createPost } from '../utils/postService';
 import { supabase } from '../utils/supabase';
+import { Post } from '../types/post';
 
 interface ImagePreview {
   file: File;
