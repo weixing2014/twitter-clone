@@ -8,7 +8,7 @@ import { followUser, unfollowUser } from '../utils/userService';
 interface UserCardProps {
   user: UserProfile;
   currentUserId?: string;
-  onFollowStatusChange?: () => void;
+  onFollowStatusChange?: (userId: string, isFollowing: boolean) => void;
 }
 
 const UserCard = ({ user, currentUserId, onFollowStatusChange }: UserCardProps) => {
@@ -25,13 +25,13 @@ const UserCard = ({ user, currentUserId, onFollowStatusChange }: UserCardProps) 
         const success = await unfollowUser(currentUserId, user.id);
         if (success) {
           setIsFollowing(false);
-          onFollowStatusChange?.();
+          onFollowStatusChange?.(user.id, false);
         }
       } else {
         const success = await followUser(currentUserId, user.id);
         if (success) {
           setIsFollowing(true);
-          onFollowStatusChange?.();
+          onFollowStatusChange?.(user.id, true);
         }
       }
     } catch (error) {

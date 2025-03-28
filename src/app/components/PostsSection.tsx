@@ -8,7 +8,7 @@ interface PostsSectionProps {
   isLoading?: boolean;
   emptyMessage?: string;
   currentUserId?: string;
-  onPostDeleted?: (postId: string) => void;
+  onPostDeleted: (postId: string) => void;
 }
 
 const PostsSection = ({

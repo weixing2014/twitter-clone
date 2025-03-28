@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function SignIn() {
+// Create a separate component that uses useSearchParams
+function SignInContent() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -32,7 +33,11 @@ export default function SignIn() {
     try {
       const { error } = await signInWithGoogle();
       if (error) {
-        setError(error.message);
+        setError(
+          typeof error === 'object' && error !== null && 'message' in error
+            ? String(error.message)
+            : 'An error occurred during Google sign in'
+        );
       }
       // No need to redirect here - Supabase OAuth will handle the redirect
     } catch (err) {
@@ -82,7 +87,11 @@ export default function SignIn() {
         const { error } = await signup(email, password);
 
         if (error) {
-          setError(error.message);
+          setError(
+            typeof error === 'object' && error !== null && 'message' in error
+              ? String(error.message)
+              : 'An error occurred during sign up'
+          );
         } else {
           setSuccessMessage('Registration successful! Please check your email for verification.');
           // Reset form after successful signup
@@ -103,7 +112,11 @@ export default function SignIn() {
         const { error } = await login(email, password);
 
         if (error) {
-          setError(error.message);
+          setError(
+            typeof error === 'object' && error !== null && 'message' in error
+              ? String(error.message)
+              : 'An error occurred during sign in'
+          );
         } else {
           // Redirect to home page after successful login
           router.push('/');
@@ -305,5 +318,14 @@ export default function SignIn() {
         </p>
       </div>
     </div>
+  );
+}
+
+// Wrap the component that uses useSearchParams in Suspense
+export default function SignIn() {
+  return (
+    <Suspense fallback={<div className='flex justify-center p-6'>Loading...</div>}>
+      <SignInContent />
+    </Suspense>
   );
 }

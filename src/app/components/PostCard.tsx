@@ -11,7 +11,7 @@ import CommentSection from './CommentSection';
 
 interface PostCardProps {
   post: Post;
-  currentUserId: string;
+  currentUserId?: string;
   onPostDeleted: (postId: string) => void;
 }
 
