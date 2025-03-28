@@ -7,7 +7,7 @@ import Header from './components/Header';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'OhYea',
+  title: 'OhYeah',
   description: 'Share your thoughts with the world. Simple, fast, social.',
   icons: {
     icon: '/logo.svg',

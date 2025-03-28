@@ -32,7 +32,7 @@ const Header = () => {
               className='text-xl font-bold text-blue-500 cursor-pointer'
               aria-label='Home'
             >
-              OhYea
+              OhYeah
             </Link>
             <nav className='hidden md:flex space-x-2'>
               <Link

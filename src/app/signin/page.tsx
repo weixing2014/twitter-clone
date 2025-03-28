@@ -141,7 +141,7 @@ function SignInContent() {
   return (
     <div className='max-w-md mx-auto my-12 p-6 bg-white dark:bg-gray-800 rounded-lg shadow-md'>
       <div className='flex justify-center mb-6'>
-        <img src='/logo.svg' alt='OhYea' width='64' height='64' className='mb-4' />
+        <img src='/logo.svg' alt='OhYeah' width='64' height='64' className='mb-4' />
       </div>
 
       <div className='flex mb-6'>
@@ -172,7 +172,7 @@ function SignInContent() {
       </div>
 
       <h1 className='text-2xl font-bold text-center mb-6 text-gray-900 dark:text-white'>
-        {isSignUp ? 'Join OhYea' : 'Welcome back to OhYea'}
+        {isSignUp ? 'Join OhYeah' : 'Welcome back to OhYeah'}
       </h1>
 
       {error && (

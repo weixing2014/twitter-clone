@@ -1,4 +1,4 @@
-# OhYea
+# OhYeah
 
 A social network application built with Next.js, Tailwind CSS, and Supabase.
 
@@ -29,7 +29,7 @@ A social network application built with Next.js, Tailwind CSS, and Supabase.
 
 ```bash
 git clone <repository-url>
-cd ohyea
+cd ohyeah
 ```
 
 ### 2. Install dependencies
