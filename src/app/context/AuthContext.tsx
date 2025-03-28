@@ -3,6 +3,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User as SupabaseUser, Session } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabase';
+import { getRedirectUrl } from '../utils/redirectUrl';
 
 // User type definition
 export type User = {
@@ -126,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: getRedirectUrl('/auth/callback'),
       },
     });
 
@@ -140,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: getRedirectUrl('/auth/callback'),
         queryParams: {
           access_type: 'offline',
           prompt: 'consent',
