@@ -94,10 +94,17 @@ export const deletePost = async (postId: string): Promise<void> => {
     // If the post has images, delete them from storage
     if (post?.image_urls && post.image_urls.length > 0) {
       // Extract file paths from URLs
-      const filePaths = post.image_urls.map((url) => {
-        const urlObj = new URL(url);
-        return urlObj.pathname.split('/').slice(-2).join('/'); // Get user_id/filename
-      });
+      const filePaths = post.image_urls
+        .map((url: string) => {
+          try {
+            const urlObj = new URL(url);
+            return urlObj.pathname.split('/').slice(-2).join('/'); // Get user_id/filename
+          } catch (error) {
+            console.error('Error parsing URL:', url, error);
+            return '';
+          }
+        })
+        .filter(Boolean); // Remove any empty strings
 
       // Delete all images from storage
       const { error: storageError } = await supabase.storage.from('post-images').remove(filePaths);

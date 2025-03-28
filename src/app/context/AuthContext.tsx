@@ -16,12 +16,12 @@ export type User = {
 type AuthContextType = {
   user: User;
   session: Session | null;
-  login: (email: string, password: string) => Promise<{ error: any | null }>;
+  login: (email: string, password: string) => Promise<{ error: unknown | null }>;
   signup: (
     email: string,
     password: string
-  ) => Promise<{ error: any | null; user: SupabaseUser | null }>;
-  signInWithGoogle: () => Promise<{ error: any | null }>;
+  ) => Promise<{ error: unknown | null; user: SupabaseUser | null }>;
+  signInWithGoogle: () => Promise<{ error: unknown | null }>;
   logout: () => Promise<void>;
   isLoading: boolean;
 };
@@ -110,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign in with email and password
   const login = async (email: string, password: string) => {
     setIsLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });

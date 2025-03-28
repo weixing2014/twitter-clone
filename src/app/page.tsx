@@ -6,7 +6,6 @@ import { Post } from './types/post';
 import { getPosts } from './utils/postService';
 import ComposePost from './components/ComposePost';
 import PostsSection from './components/PostsSection';
-import PostCard from './components/PostCard';
 
 export default function HomePage() {
   const { user } = useAuth();
