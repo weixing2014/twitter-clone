@@ -81,16 +81,45 @@ export const unfollowUser = async (followerId: string, followingId: string): Pro
   }
 };
 
-export const getUserById = async (userId: string): Promise<UserProfile | null> => {
+export const getUserById = async (
+  userId: string,
+  currentUserId?: string
+): Promise<UserProfile | null> => {
   try {
-    const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).single();
+    // Get user profile
+    const { data: user, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
 
     if (error) {
       console.error('Error fetching user:', error);
       throw error;
     }
 
-    return data;
+    // If we have a current user, check if they're following this user
+    if (currentUserId) {
+      const { data: followData, error: followError } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUserId)
+        .eq('following_id', userId)
+        .single();
+
+      if (followError && followError.code !== 'PGRST116') {
+        // PGRST116 is "no rows returned"
+        console.error('Error checking follow status:', followError);
+        throw followError;
+      }
+
+      return {
+        ...user,
+        is_following: !!followData,
+      };
+    }
+
+    return user;
   } catch (error) {
     console.error('Error in getUserById:', error);
     throw error;
