@@ -15,11 +15,12 @@ export type User = {
 
 // Auth context type
 type AuthContextType = {
-  user: User;
+  user: User | null;
   session: Session | null;
-  signInWithGoogle: () => Promise<{ error: unknown | null }>;
-  logout: () => Promise<void>;
   isLoading: boolean;
+  signInWithGoogle: () => Promise<void>;
+  logout: () => Promise<void>;
+  updateUsername: (newUsername: string) => void;
 };
 
 // Create the context
@@ -27,7 +28,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Auth provider component
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -106,20 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Sign in with Google
   const signInWithGoogle = async () => {
     try {
-      const redirectUrl = getRedirectUrl('/auth/callback');
-
-      console.log('Google Sign In Debug:', {
-        redirectUrl,
-        windowLocation: {
-          origin: window.location.origin,
-          href: window.location.href,
-        },
-      });
-
+      const redirectUrl = getRedirectUrl();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: redirectUrl,
+          redirectTo: `${redirectUrl}/auth/callback`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -129,14 +121,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (error) {
-        console.error('Error during Google sign-in:', error);
-        return { error };
+        console.error('Error signing in with Google:', error);
+        throw error;
       }
-
-      return { error: null };
     } catch (error) {
       console.error('Error in signInWithGoogle:', error);
-      return { error };
+      throw error;
     }
   };
 
@@ -147,11 +137,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   };
 
-  return (
-    <AuthContext.Provider value={{ user, session, signInWithGoogle, logout, isLoading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const updateUsername = (newUsername: string) => {
+    if (user) {
+      setUser({
+        ...user,
+        username: newUsername,
+      });
+    }
+  };
+
+  const value: AuthContextType = {
+    user,
+    session,
+    isLoading,
+    signInWithGoogle,
+    logout,
+    updateUsername,
+  };
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 // Custom hook to use auth context

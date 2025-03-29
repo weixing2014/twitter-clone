@@ -11,69 +11,107 @@ export const createPost = async (
     } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', user.id)
-      .single();
-
     const { data, error } = await supabase
       .from('posts')
       .insert([
         {
           content,
           user_id: user.id,
-          username: profile?.username || user.email?.split('@')[0] || 'Anonymous',
-          avatar_url: profile?.avatar_url,
           image_urls: imageUrls || null,
         },
       ])
-      .select()
+      .select(
+        `
+        *,
+        profiles:user_id (
+          username,
+          avatar_url
+        )
+      `
+      )
       .single();
 
     if (error) throw error;
-    return data;
+
+    // Transform the data to match the Post type
+    return {
+      ...data,
+      username: data.profiles.username,
+      avatar_url: data.profiles.avatar_url,
+    };
   } catch (error) {
     console.error('Error creating post:', error);
     return null;
   }
 };
 
-export const getPosts = async (currentUserId?: string): Promise<Post[]> => {
+export const getPosts = async (
+  currentUserId?: string,
+  fetchAll: boolean = false
+): Promise<Post[]> => {
   try {
-    if (!currentUserId) {
+    if (!currentUserId && !fetchAll) {
       return [];
     }
 
-    // First, get the users that the current user follows
-    const { data: followingData, error: followingError } = await supabase
-      .from('follows')
-      .select('following_id')
-      .eq('follower_id', currentUserId);
-
-    if (followingError) {
-      throw followingError;
-    }
-
-    // Get the list of user IDs to fetch posts from (current user + followed users)
-    const userIds = [currentUserId, ...(followingData?.map((follow) => follow.following_id) || [])];
-
-    // Get posts from these users
-    const { data, error } = await supabase
+    let query = supabase
       .from('posts')
-      .select('*')
-      .in('user_id', userIds)
+      .select(
+        `
+        *,
+        profiles!posts_user_id_fkey (
+          username,
+          avatar_url
+        )
+      `
+      )
       .order('created_at', { ascending: false });
 
-    if (error) {
-      throw error;
+    // If not fetching all posts, filter by following
+    if (!fetchAll && currentUserId) {
+      // Get the users that the current user follows
+      const { data: followingData } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', currentUserId);
+
+      // Get the list of user IDs to fetch posts from (current user + followed users)
+      const userIds = [
+        currentUserId,
+        ...(followingData?.map((follow) => follow.following_id) || []),
+      ];
+
+      // Add the filter for specific users
+      query = query.in('user_id', userIds);
     }
 
-    // Transform the data to ensure image_urls is always an array
-    return (data || []).map((post) => ({
-      ...post,
-      image_urls: Array.isArray(post.image_urls) ? post.image_urls : [],
-    }));
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching posts:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+      });
+      return [];
+    }
+
+    if (!data) {
+      console.log('No posts found');
+      return [];
+    }
+
+    // Transform the data to match the Post type
+    const transformedPosts = data
+      .filter((post) => post.profiles) // Only include posts with valid profiles
+      .map((post) => ({
+        ...post,
+        username: post.profiles.username || 'Deleted User',
+        avatar_url: post.profiles.avatar_url,
+      }));
+
+    return transformedPosts;
   } catch (error) {
     console.error('Error in getPosts:', error);
     return [];
@@ -168,7 +206,15 @@ export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
   try {
     const { data, error } = await supabase
       .from('posts')
-      .select('*')
+      .select(
+        `
+        *,
+        profiles!posts_user_id_fkey (
+          username,
+          avatar_url
+        )
+      `
+      )
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
@@ -177,7 +223,12 @@ export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
       throw error;
     }
 
-    return data || [];
+    // Transform the data to match the Post type
+    return (data || []).map((post) => ({
+      ...post,
+      username: post.profiles.username,
+      avatar_url: post.profiles.avatar_url,
+    }));
   } catch (error) {
     console.error('Error in getPostsByUserId:', error);
     throw error;

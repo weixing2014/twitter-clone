@@ -125,3 +125,31 @@ export const getUserById = async (
     throw error;
   }
 };
+
+export const updateUsername = async (userId: string, newUsername: string): Promise<boolean> => {
+  try {
+    // Update username in profiles table
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ username: newUsername })
+      .eq('id', userId);
+
+    if (profileError) {
+      throw profileError;
+    }
+
+    // Update user metadata in auth.users
+    const { error: authError } = await supabase.auth.updateUser({
+      data: { username: newUsername },
+    });
+
+    if (authError) {
+      throw authError;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error updating username:', error);
+    return false;
+  }
+};
