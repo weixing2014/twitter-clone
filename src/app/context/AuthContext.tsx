@@ -1,7 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User as SupabaseUser, Session } from '@supabase/supabase-js';
+import { Session } from '@supabase/supabase-js';
 import { supabase } from '../utils/supabase';
 import { getRedirectUrl } from '../utils/redirectUrl';
 
@@ -17,11 +17,6 @@ export type User = {
 type AuthContextType = {
   user: User;
   session: Session | null;
-  login: (email: string, password: string) => Promise<{ error: unknown | null }>;
-  signup: (
-    email: string,
-    password: string
-  ) => Promise<{ error: unknown | null; user: SupabaseUser | null }>;
   signInWithGoogle: () => Promise<{ error: unknown | null }>;
   logout: () => Promise<void>;
   isLoading: boolean;
@@ -108,50 +103,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initializeAuth();
   }, []);
 
-  // Sign in with email and password
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    setIsLoading(false);
-    return { error };
-  };
-
-  // Sign up with email and password
-  const signup = async (email: string, password: string) => {
-    setIsLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: getRedirectUrl('/auth/callback'),
-      },
-    });
-
-    setIsLoading(false);
-    return { error, user: data.user };
-  };
-
   // Sign in with Google
   const signInWithGoogle = async () => {
-    setIsLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: getRedirectUrl('/auth/callback'),
-        queryParams: {
-          access_type: 'offline',
-          prompt: 'consent',
-        },
-        scopes: 'email profile',
-      },
-    });
+    try {
+      const redirectUrl = getRedirectUrl('/auth/callback');
 
-    setIsLoading(false);
-    return { error };
+      console.log('Google Sign In Debug:', {
+        redirectUrl,
+        windowLocation: {
+          origin: window.location.origin,
+          href: window.location.href,
+        },
+      });
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          scopes: 'email profile',
+        },
+      });
+
+      if (error) {
+        console.error('Error during Google sign-in:', error);
+        return { error };
+      }
+
+      return { error: null };
+    } catch (error) {
+      console.error('Error in signInWithGoogle:', error);
+      return { error };
+    }
   };
 
   // Sign out
@@ -162,9 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider
-      value={{ user, session, login, signup, signInWithGoogle, logout, isLoading }}
-    >
+    <AuthContext.Provider value={{ user, session, signInWithGoogle, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );
