@@ -3,6 +3,7 @@ export interface Comment {
   post_id: string;
   user_id: string;
   content: string;
+  image_urls?: string[] | null;
   created_at: string;
   updated_at: string;
   username?: string;

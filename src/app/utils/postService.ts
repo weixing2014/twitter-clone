@@ -3,7 +3,7 @@ import { Post } from '../types/post';
 
 export const createPost = async (
   content: string,
-  imageUrls?: string[] | null
+  imageUrls: string[] = []
 ): Promise<Post | null> => {
   try {
     const {
@@ -11,19 +11,31 @@ export const createPost = async (
     } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
+    // Get the user's profile to get their username
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('username, avatar_url')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) throw profileError;
+
+    // Create the post with the user's username
+    const { data: post, error: postError } = await supabase
       .from('posts')
       .insert([
         {
           content,
           user_id: user.id,
-          image_urls: imageUrls || null,
+          image_urls: imageUrls,
+          username: profile.username,
+          avatar_url: profile.avatar_url,
         },
       ])
       .select(
         `
         *,
-        profiles:user_id (
+        profiles!posts_user_id_fkey (
           username,
           avatar_url
         )
@@ -31,13 +43,13 @@ export const createPost = async (
       )
       .single();
 
-    if (error) throw error;
+    if (postError) throw postError;
 
     // Transform the data to match the Post type
     return {
-      ...data,
-      username: data.profiles.username,
-      avatar_url: data.profiles.avatar_url,
+      ...post,
+      username: post.profiles.username,
+      avatar_url: post.profiles.avatar_url,
     };
   } catch (error) {
     console.error('Error creating post:', error);
