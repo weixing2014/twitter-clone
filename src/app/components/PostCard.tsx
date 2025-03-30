@@ -2,12 +2,22 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Post } from '../types/post';
 import { deletePost } from '../utils/postService';
 import { getCommentCount } from '../utils/commentService';
 import { formatDistanceToNow } from 'date-fns';
 import CommentSection from './CommentSection';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../contexts/AuthContext';
+import { supabase } from '../utils/supabase';
+import {
+  splitContent,
+  isMention,
+  isTopic,
+  getUsernameFromMention,
+  getTopicFromPart,
+} from '../utils/parsers';
 
 interface PostCardProps {
   post: Post;
@@ -74,11 +84,10 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
                   post.avatar_url ||
                   `https://api.dicebear.com/7.x/avataaars/png?seed=${post.username}`
                 }
-                alt={post.username}
-                width={48}
-                height={48}
-                className='object-cover'
-                unoptimized
+                alt={`${post.username}'s avatar`}
+                fill
+                className='object-cover group-hover:scale-105 transition-transform duration-200'
+                sizes='48px'
               />
             </div>
           </Link>
@@ -96,10 +105,10 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
           </div>
           <div className='flex items-start justify-between mt-1'>
             <p className='text-gray-900 dark:text-white whitespace-pre-wrap break-words flex-1'>
-              {(post.content || '').split(/(@[^\s]+(?:\s+[^\s]+)*)|(#\w+)/).map((part, index) => {
-                if (!part) return null;
-                if (part.startsWith('@')) {
-                  const username = part.slice(1);
+              {splitContent(post.content || '').map((part, index) => {
+                if (!part) return <span key={index}></span>;
+                if (isMention(part)) {
+                  const username = getUsernameFromMention(part);
                   // Find the mentioned user from the mentioned_users array
                   const mentionedUser = post.mentioned_users?.find(
                     (user) => user.username === username
@@ -112,25 +121,25 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
                         href={`/users/${mentionedUser.id}`}
                         className='text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
                       >
-                        {part}
+                        @{username}
                       </Link>
                     );
                   }
                   // If no mentioned user found, just show the text without a link
-                  return part;
-                } else if (part.startsWith('#')) {
-                  const topic = part.slice(1);
+                  return <span key={index}>{part}</span>;
+                } else if (isTopic(part)) {
+                  const topic = getTopicFromPart(part);
                   return (
                     <Link
                       key={index}
                       href={`/topics/${topic}`}
                       className='text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
                     >
-                      {part}
+                      #{topic}
                     </Link>
                   );
                 }
-                return part;
+                return <span key={index}>{part}</span>;
               })}
             </p>
             <div className='flex items-center space-x-2 ml-4'>

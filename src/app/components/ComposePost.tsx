@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { createPost } from '../utils/postService';
 import { searchUsers, UserProfile } from '../utils/userService';
+import { searchTopics } from '../utils/topicService';
 import { supabase } from '../utils/supabase';
 import { Post } from '../types/post';
 
@@ -25,7 +26,10 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionSuggestions, setMentionSuggestions] = useState<UserProfile[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [topicQuery, setTopicQuery] = useState('');
+  const [topicSuggestions, setTopicSuggestions] = useState<{ id: string; name: string }[]>([]);
+  const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
+  const [showTopicSuggestions, setShowTopicSuggestions] = useState(false);
   const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -41,7 +45,8 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
+        setShowMentionSuggestions(false);
+        setShowTopicSuggestions(false);
       }
     };
 
@@ -59,27 +64,77 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
     const lastAtSymbol = newContent.lastIndexOf('@', newPosition);
     if (lastAtSymbol !== -1) {
       const nextSpace = newContent.indexOf(' ', lastAtSymbol);
-      const query = newContent.slice(lastAtSymbol + 1, nextSpace === -1 ? undefined : nextSpace);
-      setMentionQuery(query);
-      setShowSuggestions(true);
+      // Only show suggestions if we're typing between @ and space
+      if (nextSpace === -1 || nextSpace > newPosition) {
+        const query = newContent.slice(lastAtSymbol + 1, nextSpace === -1 ? undefined : nextSpace);
+        setMentionQuery(query);
+        setShowMentionSuggestions(true);
+        setShowTopicSuggestions(false);
+      } else {
+        setShowMentionSuggestions(false);
+        setMentionQuery('');
+      }
     } else {
-      setShowSuggestions(false);
+      setShowMentionSuggestions(false);
+      setMentionQuery('');
+    }
+
+    // Check for # symbol
+    const lastHashSymbol = newContent.lastIndexOf('#', newPosition);
+    if (lastHashSymbol !== -1) {
+      const nextSpace = newContent.indexOf(' ', lastHashSymbol);
+      const query = newContent.slice(lastHashSymbol + 1, nextSpace === -1 ? undefined : nextSpace);
+
+      // If there's a space after the topic, hide suggestions
+      if (nextSpace !== -1 && nextSpace < newPosition) {
+        setShowTopicSuggestions(false);
+      } else {
+        setTopicQuery(query);
+        setShowTopicSuggestions(true);
+        setShowMentionSuggestions(false);
+      }
+    } else {
+      setShowTopicSuggestions(false);
+      setTopicQuery('');
     }
   };
 
   const handleUserSelect = (selectedUser: UserProfile) => {
     const beforeMention = content.slice(0, content.lastIndexOf('@'));
     const afterMention = content.slice(content.lastIndexOf('@') + mentionQuery.length + 1);
-    const newContent = `${beforeMention}@${selectedUser.username}${afterMention}`;
+    const newContent = `${beforeMention}@${selectedUser.username} ${afterMention}`;
     setContent(newContent);
-    setShowSuggestions(false);
+    setShowMentionSuggestions(false);
     setMentionQuery('');
+
+    // Focus back on textarea and place cursor after the mention
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      const cursorPosition = beforeMention.length + selectedUser.username.length + 2; // +2 for @ and space
+      textareaRef.current.setSelectionRange(cursorPosition, cursorPosition);
+    }
+  };
+
+  const handleTopicSelect = (selectedTopic: { id: string; name: string }) => {
+    const beforeTopic = content.slice(0, content.lastIndexOf('#'));
+    const afterTopic = content.slice(content.lastIndexOf('#') + topicQuery.length + 1);
+    const newContent = `${beforeTopic}#${selectedTopic.name} ${afterTopic}`;
+    setContent(newContent);
+    setShowTopicSuggestions(false);
+    setTopicQuery('');
+
+    // Focus back on textarea and place cursor after the topic
+    if (textareaRef.current) {
+      textareaRef.current.focus();
+      const cursorPosition = beforeTopic.length + selectedTopic.name.length + 2; // +2 for # and space
+      textareaRef.current.setSelectionRange(cursorPosition, cursorPosition);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (!showSuggestions) return;
+    if (!showMentionSuggestions && !showTopicSuggestions) return;
 
-    if (e.key === 'ArrowDown' && mentionSuggestions.length > 0) {
+    if (e.key === 'ArrowDown') {
       e.preventDefault();
       const firstSuggestion = suggestionsRef.current?.querySelector('button');
       if (firstSuggestion) {
@@ -89,7 +144,8 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
   };
 
   const handleSuggestionKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
-    if (e.key === 'ArrowDown' && index < mentionSuggestions.length - 1) {
+    const suggestions = showMentionSuggestions ? mentionSuggestions : topicSuggestions;
+    if (e.key === 'ArrowDown' && index < suggestions.length - 1) {
       e.preventDefault();
       const nextSuggestion = suggestionsRef.current?.querySelectorAll('button')[index + 1];
       if (nextSuggestion) {
@@ -102,7 +158,8 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
         (prevSuggestion as HTMLElement).focus();
       }
     } else if (e.key === 'Escape') {
-      setShowSuggestions(false);
+      setShowMentionSuggestions(false);
+      setShowTopicSuggestions(false);
     }
   };
 
@@ -116,9 +173,25 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
       }
     };
 
-    const debounceTimeout = setTimeout(searchForUsers, 300);
+    const searchForTopics = async () => {
+      if (topicQuery.length > 0) {
+        const topics = await searchTopics(topicQuery);
+        setTopicSuggestions(topics);
+      } else {
+        setTopicSuggestions([]);
+      }
+    };
+
+    const debounceTimeout = setTimeout(() => {
+      if (showMentionSuggestions) {
+        searchForUsers();
+      } else if (showTopicSuggestions) {
+        searchForTopics();
+      }
+    }, 300);
+
     return () => clearTimeout(debounceTimeout);
-  }, [mentionQuery]);
+  }, [mentionQuery, topicQuery, showMentionSuggestions, showTopicSuggestions]);
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -321,7 +394,7 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
                 </div>
               )}
             </div>
-            {showSuggestions && mentionSuggestions.length > 0 && (
+            {showMentionSuggestions && mentionSuggestions.length > 0 && (
               <div
                 ref={suggestionsRef}
                 className='absolute z-10 mt-1 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-h-60 overflow-y-auto'
@@ -351,6 +424,26 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
                         )}
                       </div>
                       <span className='text-gray-900 dark:text-white'>{user.username}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {showTopicSuggestions && topicSuggestions.length > 0 && (
+              <div
+                ref={suggestionsRef}
+                className='absolute z-10 mt-1 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-h-60 overflow-y-auto'
+              >
+                {topicSuggestions.map((topic, index) => (
+                  <button
+                    key={topic.id}
+                    type='button'
+                    onClick={() => handleTopicSelect(topic)}
+                    onKeyDown={(e) => handleSuggestionKeyDown(e, index)}
+                    className='w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700'
+                  >
+                    <div className='flex items-center space-x-2'>
+                      <span className='text-gray-900 dark:text-white'>#{topic.name}</span>
                     </div>
                   </button>
                 ))}

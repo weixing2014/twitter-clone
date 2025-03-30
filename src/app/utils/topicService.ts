@@ -20,7 +20,7 @@ export const getPostsByTopic = async (topic: string, currentUserId?: string): Pr
       return [];
     }
 
-    // Get posts that contain the topic ID
+    // Get posts containing this topic ID
     const { data: posts, error: postsError } = await supabase
       .from('posts')
       .select(
@@ -35,27 +35,44 @@ export const getPostsByTopic = async (topic: string, currentUserId?: string): Pr
       .contains('topics', [topicData.id])
       .order('created_at', { ascending: false });
 
-    if (postsError) throw postsError;
-
-    // Get the IDs of users that the current user follows
-    let followingIds: string[] = [];
-    if (currentUserId) {
-      const { data: following } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', currentUserId);
-      followingIds = following?.map((f) => f.following_id) || [];
+    if (postsError) {
+      console.error('Error fetching posts:', postsError);
+      return [];
     }
 
+    if (!posts) {
+      return [];
+    }
+
+    // Get all mentioned user IDs from all posts
+    const allMentionedUserIds = posts
+      .flatMap((post) => post.mentions || [])
+      .filter((id): id is string => id !== null);
+
+    // Fetch mentioned users' information in a single query
+    const { data: mentionedUsers } = await supabase
+      .from('profiles')
+      .select('id, username, avatar_url')
+      .in('id', allMentionedUserIds);
+
+    // Create a map of user IDs to user information
+    const mentionedUsersMap = new Map(mentionedUsers?.map((user) => [user.id, user]) || []);
+
     // Transform the data to match the Post type
-    return (posts || []).map((post) => ({
+    return posts.map((post) => ({
       ...post,
-      username: post.profiles?.username,
+      username: post.profiles?.username || 'Deleted User',
       avatar_url: post.profiles?.avatar_url,
-      isFollowing: followingIds.includes(post.user_id),
+      mentions: post.mentions || [],
+      mentioned_users: (post.mentions || [])
+        .map((id) => mentionedUsersMap.get(id))
+        .filter(
+          (user): user is { id: string; username: string; avatar_url: string | null } =>
+            user !== undefined
+        ),
     }));
   } catch (error) {
-    console.error('Error fetching posts by topic:', error);
+    console.error('Error in getPostsByTopic:', error);
     return [];
   }
 };
@@ -91,6 +108,22 @@ export const getTrendingTopics = async (limit: number = 10): Promise<string[]> =
     return topics?.map((topic) => topic.name) || [];
   } catch (error) {
     console.error('Error fetching trending topics:', error);
+    return [];
+  }
+};
+
+export const searchTopics = async (query: string): Promise<{ id: string; name: string }[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('topics')
+      .select('id, name')
+      .ilike('name', `${query}%`)
+      .limit(5);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error searching topics:', error);
     return [];
   }
 };
