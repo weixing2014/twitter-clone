@@ -3,39 +3,65 @@ import { Post } from '../types/post';
 
 export const createPost = async (
   content: string,
-  imageUrls: string[] = []
+  imageUrls: string[] = [],
+  userId?: string
 ): Promise<Post | null> => {
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    if (!userId) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+      userId = user.id;
+    }
 
-    // Get the user's profile to get their username
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('username, avatar_url')
-      .eq('id', user.id)
-      .single();
+    // Extract mentions from content
+    const mentionRegex = /@([^\s]+(?:\s+[^\s]+)*)/g;
+    const mentions: string[] = [];
+    let match;
+    console.log('Content to process for mentions:', content);
 
-    if (profileError) throw profileError;
+    while ((match = mentionRegex.exec(content)) !== null) {
+      const username = match[1];
+      console.log('Found mention:', username);
 
-    // Create the post with the user's username
-    const { data: post, error: postError } = await supabase
+      // Get user ID from username
+      const { data: user, error: userError } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .eq('username', username)
+        .single();
+
+      if (userError) {
+        console.error('Error fetching user for mention:', username, userError);
+        continue;
+      }
+
+      if (user) {
+        console.log('Found user ID for mention:', username, user.id);
+        mentions.push(user.id);
+      } else {
+        console.log('No user found for mention:', username);
+      }
+    }
+
+    console.log('Final mentions array:', mentions);
+
+    // Create post with mentions
+    const { data: post, error } = await supabase
       .from('posts')
       .insert([
         {
           content,
-          user_id: user.id,
+          user_id: userId,
           image_urls: imageUrls,
-          username: profile.username,
-          avatar_url: profile.avatar_url,
+          mentions: mentions,
         },
       ])
       .select(
         `
         *,
-        profiles!posts_user_id_fkey (
+        profiles:user_id (
           username,
           avatar_url
         )
@@ -43,13 +69,33 @@ export const createPost = async (
       )
       .single();
 
-    if (postError) throw postError;
+    if (error) {
+      console.error('Error creating post:', error);
+      throw error;
+    }
+
+    console.log('Created post with mentions:', post);
+
+    // Fetch mentioned users' information
+    const { data: mentionedUsers } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('id', mentions);
 
     // Transform the data to match the Post type
     return {
-      ...post,
+      id: post.id,
+      content: post.content,
+      user_id: post.user_id,
       username: post.profiles.username,
       avatar_url: post.profiles.avatar_url,
+      image_urls: post.image_urls,
+      created_at: post.created_at,
+      likes_count: 0,
+      comments_count: 0,
+      is_liked: false,
+      mentions: post.mentions,
+      mentioned_users: mentionedUsers || [],
     };
   } catch (error) {
     console.error('Error creating post:', error);
@@ -71,7 +117,7 @@ export const getPosts = async (
       .select(
         `
         *,
-        profiles!posts_user_id_fkey (
+        profiles:user_id (
           username,
           avatar_url
         )
@@ -114,6 +160,22 @@ export const getPosts = async (
       return [];
     }
 
+    // Get all mentioned user IDs from all posts
+    const allMentionedUserIds = data
+      .flatMap((post) => post.mentions || [])
+      .filter((id): id is string => id !== null);
+
+    // Fetch mentioned users' information in a single query
+    const { data: mentionedUsers } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('id', allMentionedUserIds);
+
+    // Create a map of user IDs to usernames
+    const mentionedUsersMap = new Map(
+      mentionedUsers?.map((user: { id: string; username: string }) => [user.id, user]) || []
+    );
+
     // Transform the data to match the Post type
     const transformedPosts = data
       .filter((post) => post.profiles) // Only include posts with valid profiles
@@ -121,6 +183,10 @@ export const getPosts = async (
         ...post,
         username: post.profiles.username || 'Deleted User',
         avatar_url: post.profiles.avatar_url,
+        mentions: post.mentions || [],
+        mentioned_users: (post.mentions || [])
+          .map((id: string) => mentionedUsersMap.get(id))
+          .filter((user): user is { id: string; username: string } => user !== undefined),
       }));
 
     return transformedPosts;

@@ -153,3 +153,19 @@ export const updateUsername = async (userId: string, newUsername: string): Promi
     return false;
   }
 };
+
+export const searchUsers = async (query: string, limit: number = 5): Promise<UserProfile[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .ilike('username', `%${query}%`)
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error searching users:', error);
+    return [];
+  }
+};

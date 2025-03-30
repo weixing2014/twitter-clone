@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { createPost } from '../utils/postService';
+import { searchUsers, UserProfile } from '../utils/userService';
 import { supabase } from '../utils/supabase';
 import { Post } from '../types/post';
 
@@ -22,8 +23,13 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [imagePreviews, setImagePreviews] = useState<ImagePreview[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionSuggestions, setMentionSuggestions] = useState<UserProfile[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [cursorPosition, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -31,6 +37,88 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
     }
   }, [content]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newContent = e.target.value;
+    const newPosition = e.target.selectionStart;
+    setContent(newContent);
+    setCursorPosition(newPosition);
+
+    // Check for @ symbol
+    const lastAtSymbol = newContent.lastIndexOf('@', newPosition);
+    if (lastAtSymbol !== -1) {
+      const nextSpace = newContent.indexOf(' ', lastAtSymbol);
+      const query = newContent.slice(lastAtSymbol + 1, nextSpace === -1 ? undefined : nextSpace);
+      setMentionQuery(query);
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleUserSelect = (selectedUser: UserProfile) => {
+    const beforeMention = content.slice(0, content.lastIndexOf('@'));
+    const afterMention = content.slice(content.lastIndexOf('@') + mentionQuery.length + 1);
+    const newContent = `${beforeMention}@${selectedUser.username}${afterMention}`;
+    setContent(newContent);
+    setShowSuggestions(false);
+    setMentionQuery('');
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!showSuggestions) return;
+
+    if (e.key === 'ArrowDown' && mentionSuggestions.length > 0) {
+      e.preventDefault();
+      const firstSuggestion = suggestionsRef.current?.querySelector('button');
+      if (firstSuggestion) {
+        (firstSuggestion as HTMLElement).focus();
+      }
+    }
+  };
+
+  const handleSuggestionKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    if (e.key === 'ArrowDown' && index < mentionSuggestions.length - 1) {
+      e.preventDefault();
+      const nextSuggestion = suggestionsRef.current?.querySelectorAll('button')[index + 1];
+      if (nextSuggestion) {
+        (nextSuggestion as HTMLElement).focus();
+      }
+    } else if (e.key === 'ArrowUp' && index > 0) {
+      e.preventDefault();
+      const prevSuggestion = suggestionsRef.current?.querySelectorAll('button')[index - 1];
+      if (prevSuggestion) {
+        (prevSuggestion as HTMLElement).focus();
+      }
+    } else if (e.key === 'Escape') {
+      setShowSuggestions(false);
+    }
+  };
+
+  useEffect(() => {
+    const searchForUsers = async () => {
+      if (mentionQuery.length > 0) {
+        const users = await searchUsers(mentionQuery);
+        setMentionSuggestions(users);
+      } else {
+        setMentionSuggestions([]);
+      }
+    };
+
+    const debounceTimeout = setTimeout(searchForUsers, 300);
+    return () => clearTimeout(debounceTimeout);
+  }, [mentionQuery]);
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault();
@@ -207,7 +295,7 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
               )}
             </div>
           </div>
-          <div className='flex-grow relative'>
+          <div className='flex-1 min-w-0'>
             <div
               ref={dropZoneRef}
               className={`relative ${
@@ -218,96 +306,132 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
               onDragOver={handleDragOver}
               onDrop={handleDrop}
             >
-              <div className='flex-1 min-w-0'>
-                <textarea
-                  ref={textareaRef}
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="What's happening?"
-                  className='w-full resize-none bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none'
-                  rows={1}
-                />
-                {imagePreviews.length > 0 && (
-                  <div className='mt-2 grid grid-cols-4 gap-1'>
-                    {imagePreviews.map((preview, index) => (
-                      <div
-                        key={index}
-                        className='relative aspect-square rounded-lg overflow-hidden'
-                      >
-                        <img
-                          src={preview.url}
-                          alt={`Preview ${index + 1}`}
-                          className='w-full h-full object-cover'
-                        />
-                        <button
-                          type='button'
-                          onClick={() => handleRemoveImage(index)}
-                          className='absolute top-0.5 right-0.5 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors cursor-pointer'
-                        >
-                          <svg
-                            xmlns='http://www.w3.org/2000/svg'
-                            fill='none'
-                            viewBox='0 0 24 24'
-                            strokeWidth={1.5}
-                            stroke='currentColor'
-                            className='w-3 h-3'
-                          >
-                            <path
-                              strokeLinecap='round'
-                              strokeLinejoin='round'
-                              d='M6 18L18 6M6 6l12 12'
-                            />
-                          </svg>
-                        </button>
+              <textarea
+                ref={textareaRef}
+                value={content}
+                onChange={handleContentChange}
+                onKeyDown={handleKeyDown}
+                placeholder="What's happening?"
+                className='w-full resize-none bg-transparent text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none'
+                rows={1}
+              />
+              {isDragging && (
+                <div className='absolute inset-0 flex items-center justify-center bg-blue-50 dark:bg-blue-900/20 rounded-lg'>
+                  <p className='text-blue-500 dark:text-blue-400 font-medium'>Drop images here</p>
+                </div>
+              )}
+            </div>
+            {showSuggestions && mentionSuggestions.length > 0 && (
+              <div
+                ref={suggestionsRef}
+                className='absolute z-10 mt-1 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 max-h-60 overflow-y-auto'
+              >
+                {mentionSuggestions.map((user, index) => (
+                  <button
+                    key={user.id}
+                    type='button'
+                    onClick={() => handleUserSelect(user)}
+                    onKeyDown={(e) => handleSuggestionKeyDown(e, index)}
+                    className='w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:bg-gray-100 dark:focus:bg-gray-700'
+                  >
+                    <div className='flex items-center space-x-2'>
+                      <div className='h-8 w-8 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-700'>
+                        {user.avatar_url ? (
+                          <img
+                            src={user.avatar_url}
+                            alt={user.username}
+                            className='h-full w-full object-cover'
+                          />
+                        ) : (
+                          <div className='h-full w-full flex items-center justify-center'>
+                            <span className='text-gray-500 dark:text-gray-400'>
+                              {user.username.charAt(0).toUpperCase()}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-                {error && <div className='text-red-500 text-sm mt-1'>{error}</div>}
-                <div className='flex items-center justify-between border-t border-gray-200 dark:border-gray-800 pt-3 mt-3'>
-                  <div className='flex items-center space-x-2'>
-                    <label className='cursor-pointer'>
-                      <input
-                        type='file'
-                        accept='image/*'
-                        multiple
-                        className='hidden'
-                        onChange={handleImageSelect}
-                      />
+                      <span className='text-gray-900 dark:text-white'>{user.username}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {imagePreviews.length > 0 && (
+              <div className='mt-2 grid grid-cols-4 gap-1'>
+                {imagePreviews.map((preview, index) => (
+                  <div key={index} className='relative aspect-square rounded-lg overflow-hidden'>
+                    <img
+                      src={preview.url}
+                      alt={`Preview ${index + 1}`}
+                      className='w-full h-full object-cover'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => handleRemoveImage(index)}
+                      className='absolute top-0.5 right-0.5 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors cursor-pointer'
+                    >
                       <svg
                         xmlns='http://www.w3.org/2000/svg'
                         fill='none'
                         viewBox='0 0 24 24'
                         strokeWidth={1.5}
                         stroke='currentColor'
-                        className='w-6 h-6 text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors'
+                        className='w-3 h-3'
                       >
                         <path
                           strokeLinecap='round'
                           strokeLinejoin='round'
-                          d='M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z'
+                          d='M6 18L18 6M6 6l12 12'
                         />
                       </svg>
-                    </label>
-                    <div
-                      className={`text-sm ${
-                        isOverLimit ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'
-                      }`}
-                    >
-                      {remainingChars} characters remaining
-                    </div>
+                    </button>
                   </div>
-                  <button
-                    type='submit'
-                    disabled={
-                      isSubmitting || isOverLimit || (!content.trim() && imagePreviews.length === 0)
-                    }
-                    className='px-4 py-2 rounded-full bg-blue-500 text-white font-medium hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+                ))}
+              </div>
+            )}
+            {error && <div className='text-red-500 text-sm mt-1'>{error}</div>}
+            <div className='flex items-center justify-between border-t border-gray-200 dark:border-gray-800 pt-3 mt-3'>
+              <div className='flex items-center space-x-2'>
+                <label className='cursor-pointer'>
+                  <input
+                    type='file'
+                    accept='image/*'
+                    multiple
+                    className='hidden'
+                    onChange={handleImageSelect}
+                  />
+                  <svg
+                    xmlns='http://www.w3.org/2000/svg'
+                    fill='none'
+                    viewBox='0 0 24 24'
+                    strokeWidth={1.5}
+                    stroke='currentColor'
+                    className='w-6 h-6 text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors'
                   >
-                    {isSubmitting ? 'Posting...' : 'Post'}
-                  </button>
+                    <path
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                      d='M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z'
+                    />
+                  </svg>
+                </label>
+                <div
+                  className={`text-sm ${
+                    isOverLimit ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  {remainingChars} characters remaining
                 </div>
               </div>
+              <button
+                type='submit'
+                disabled={
+                  isSubmitting || isOverLimit || (!content.trim() && imagePreviews.length === 0)
+                }
+                className='px-4 py-2 rounded-full bg-blue-500 text-white font-medium hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
+              >
+                {isSubmitting ? 'Posting...' : 'Post'}
+              </button>
             </div>
           </div>
         </div>
