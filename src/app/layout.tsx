@@ -24,10 +24,8 @@ export default function RootLayout({
     <html lang='en'>
       <body className={inter.className}>
         <AuthProvider>
-          <div className='min-h-screen bg-white dark:bg-gray-950'>
-            <Navbar />
-            {children}
-          </div>
+          <Navbar />
+          {children}
         </AuthProvider>
       </body>
     </html>

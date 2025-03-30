@@ -127,3 +127,63 @@ export const searchTopics = async (query: string): Promise<{ id: string; name: s
     return [];
   }
 };
+
+export const getHotTopics = async (): Promise<{ id: string; name: string; count: number }[]> => {
+  try {
+    // Get posts from the last 24 hours
+    const oneDayAgo = new Date();
+    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
+    const { data: posts, error: postsError } = await supabase
+      .from('posts')
+      .select('topics')
+      .gte('created_at', oneDayAgo.toISOString());
+
+    if (postsError) {
+      console.error('Error fetching recent posts:', postsError);
+      return [];
+    }
+
+    if (!posts) {
+      return [];
+    }
+
+    // Count topic occurrences
+    const topicCounts = new Map<string, number>();
+    posts.forEach((post) => {
+      if (post.topics) {
+        post.topics.forEach((topicId: string) => {
+          topicCounts.set(topicId, (topicCounts.get(topicId) || 0) + 1);
+        });
+      }
+    });
+
+    // Get topic names for the IDs
+    const topicIds = Array.from(topicCounts.keys());
+    const { data: topics, error: topicsError } = await supabase
+      .from('topics')
+      .select('id, name')
+      .in('id', topicIds);
+
+    if (topicsError) {
+      console.error('Error fetching topic names:', topicsError);
+      return [];
+    }
+
+    // Combine topic names with their counts
+    const hotTopics =
+      topics
+        ?.map((topic) => ({
+          id: topic.id,
+          name: topic.name,
+          count: topicCounts.get(topic.id) || 0,
+        }))
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10) || [];
+
+    return hotTopics;
+  } catch (error) {
+    console.error('Error in getHotTopics:', error);
+    return [];
+  }
+};

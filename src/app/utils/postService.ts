@@ -1,108 +1,87 @@
 import { supabase } from './supabase';
 import { Post } from '../types/post';
-import { extractMentions, extractTopics } from './parsers';
+import { extractMentions, extractTopics } from '../utils/parsers';
+import { User } from '@supabase/supabase-js';
 
-export const createPost = async (
-  content: string,
-  userId: string,
-  imageUrls: string[] = []
-): Promise<Post> => {
-  try {
-    // Extract mentioned usernames and get their IDs
-    const mentionedUsernames = extractMentions(content);
-    const mentions: string[] = [];
+export const createPost = async (content: string, imageUrls: string[] = []) => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('User not authenticated');
 
-    if (mentionedUsernames.length > 0) {
-      const { data: users, error: userError } = await supabase
-        .from('profiles')
-        .select('id')
-        .in('username', mentionedUsernames);
+  // Extract mentioned usernames and get their IDs
+  const mentionedUsernames = extractMentions(content);
+  const mentions: string[] = [];
+  let processedContent = content;
 
-      if (userError) {
-        console.error('Error fetching mentioned users:', userError);
-        return null;
-      }
+  if (mentionedUsernames.length > 0) {
+    const { data: users, error: userError } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('username', mentionedUsernames);
 
-      mentions.push(...(users?.map((user) => user.id) || []));
-    }
+    if (userError) throw userError;
 
-    // Extract topics from content
-    const topics = extractTopics(content);
-    const topicIds: string[] = [];
-
-    if (topics.length > 0) {
-      const { data: insertedTopics, error: topicError } = await supabase
-        .from('topics')
-        .upsert(
-          topics.map((name) => ({ name })),
-          { onConflict: 'name' }
-        )
-        .select('id');
-
-      if (topicError) {
-        console.error('Error inserting topics:', topicError);
-        return null;
-      }
-
-      topicIds.push(...(insertedTopics?.map((topic) => topic.id) || []));
-    }
-
-    // Create the post with mentions and topics
-    const { data: post, error: postError } = await supabase
-      .from('posts')
-      .insert([
-        {
-          content,
-          user_id: userId,
-          image_urls: imageUrls,
-          mentions: mentions.length > 0 ? mentions : null,
-          topics: topicIds.length > 0 ? topicIds : null,
-        },
-      ])
-      .select(
-        `
-        *,
-        profiles:user_id (
-          username,
-          avatar_url
-        )
-      `
-      )
-      .single();
-
-    if (postError) {
-      console.error('Error creating post:', postError);
-      return null;
-    }
-
-    // Get mentioned users' details
-    let mentionedUsers = [];
-    if (mentions.length > 0) {
-      const { data: users, error: userError } = await supabase
-        .from('profiles')
-        .select('id, username, avatar_url')
-        .in('id', mentions);
-
-      if (userError) {
-        console.error('Error fetching mentioned users:', userError);
-        return null;
-      }
-
-      mentionedUsers = users || [];
-    }
-
-    // Transform the data to match the Post type
-    return {
-      ...post,
-      username: post.profiles?.username || 'Deleted User',
-      avatar_url: post.profiles?.avatar_url,
-      mentions: post.mentions || [],
-      mentioned_users: mentionedUsers,
-    };
-  } catch (error) {
-    console.error('Error in createPost:', error);
-    return null;
+    // Replace usernames with user IDs in the content
+    users?.forEach((user) => {
+      processedContent = processedContent.replace(
+        new RegExp(`@${user.username}\\b`, 'g'),
+        `@${user.id}`
+      );
+      mentions.push(user.id);
+    });
   }
+
+  // Extract topics from content and get their IDs
+  const topicNames = extractTopics(content);
+  const topics: string[] = [];
+
+  if (topicNames.length > 0) {
+    const { data: topicData, error: topicError } = await supabase
+      .from('topics')
+      .upsert(
+        topicNames.map((name) => ({ name })),
+        { onConflict: 'name' }
+      )
+      .select('id');
+
+    if (topicError) throw topicError;
+    topics.push(...(topicData?.map((topic) => topic.id) || []));
+  }
+
+  // Ensure imageUrls is an array
+  const imageUrlsArray = Array.isArray(imageUrls) ? imageUrls : [];
+
+  const { data, error } = await supabase
+    .from('posts')
+    .insert([
+      {
+        content: processedContent,
+        user_id: user.id,
+        image_urls: imageUrlsArray,
+        mentions: mentions.length > 0 ? mentions : null,
+        topics: topics.length > 0 ? topics : null,
+      },
+    ])
+    .select(
+      `
+      *,
+      profiles:user_id (
+        username,
+        avatar_url
+      )
+    `
+    )
+    .single();
+
+  if (error) throw error;
+
+  // Transform the data to match the Post type
+  return {
+    ...data,
+    username: data.profiles?.username || 'Deleted User',
+    avatar_url: data.profiles?.avatar_url,
+  };
 };
 
 export const getPosts = async (

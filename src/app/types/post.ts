@@ -7,12 +7,12 @@ export interface Post {
   id: string;
   content: string;
   user_id: string;
-  username: string;
-  avatar_url?: string;
-  image_urls?: string[];
+  image_urls: string[];
+  mentions: string[] | null;
+  topics: string[] | null;
   created_at: string;
-  mentions?: string[];
-  mentioned_users?: MentionedUser[];
+  username: string;
+  avatar_url: string | null;
   likes_count?: number;
   comments_count?: number;
   is_liked?: boolean;

@@ -2,13 +2,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Post } from '../types/post';
 import { deletePost } from '../utils/postService';
 import { getCommentCount } from '../utils/commentService';
 import { formatDistanceToNow } from 'date-fns';
 import CommentSection from './CommentSection';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
 import { supabase } from '../utils/supabase';
 import {
@@ -21,22 +20,25 @@ import {
 
 interface PostCardProps {
   post: Post;
-  currentUserId?: string;
   onPostDeleted: (postId: string) => void;
 }
 
-export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) => {
+export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [mentionedUsers, setMentionedUsers] = useState<{ id: string; username: string }[]>([]);
+  const [parsedContent, setParsedContent] = useState(post.content);
   const formattedDate = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
-  const isCurrentUserPost = currentUserId === post.user_id;
+  const { user } = useAuth();
+  const isCurrentUserPost = user?.id === post.user_id;
 
   useEffect(() => {
     loadCommentCount();
-  }, [post.id]);
+    loadMentionedUsers();
+  }, [post.id, post.mentions]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -52,6 +54,31 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
   const loadCommentCount = async () => {
     const count = await getCommentCount(post.id);
     setCommentCount(count);
+  };
+
+  const loadMentionedUsers = async () => {
+    if (post.mentions && post.mentions.length > 0) {
+      const { data: users, error } = await supabase
+        .from('profiles')
+        .select('id, username')
+        .in('id', post.mentions);
+
+      if (!error && users) {
+        setMentionedUsers(users);
+
+        // Parse content and replace user IDs with usernames
+        let processedContent = post.content;
+        users.forEach((user) => {
+          processedContent = processedContent.replace(
+            new RegExp(`@${user.id}\\b`, 'g'),
+            `@${user.username}`
+          );
+        });
+        setParsedContent(processedContent);
+      }
+    } else {
+      setParsedContent(post.content);
+    }
   };
 
   const handleDelete = async () => {
@@ -71,6 +98,44 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
 
   const handleImageClick = (imageUrl: string) => {
     setSelectedImage(imageUrl);
+  };
+
+  const renderContent = () => {
+    const parts = splitContent(parsedContent);
+    return parts.map((part, index) => {
+      if (isMention(part)) {
+        const username = getUsernameFromMention(part);
+        const mentionedUser = mentionedUsers.find((user) => user.username === username);
+
+        if (mentionedUser) {
+          return (
+            <Link
+              key={index}
+              href={`/users/${mentionedUser.id}`}
+              className='text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
+            >
+              @{mentionedUser.username}
+            </Link>
+          );
+        }
+        return <span key={index}>{part}</span>;
+      }
+
+      if (isTopic(part)) {
+        const topicName = getTopicFromPart(part);
+        return (
+          <Link
+            key={index}
+            href={`/topics/${topicName}`}
+            className='text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
+          >
+            {part}
+          </Link>
+        );
+      }
+
+      return <span key={index}>{part}</span>;
+    });
   };
 
   return (
@@ -105,42 +170,7 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
           </div>
           <div className='flex items-start justify-between mt-1'>
             <p className='text-gray-900 dark:text-white whitespace-pre-wrap break-words flex-1'>
-              {splitContent(post.content || '').map((part, index) => {
-                if (!part) return <span key={index}></span>;
-                if (isMention(part)) {
-                  const username = getUsernameFromMention(part);
-                  // Find the mentioned user from the mentioned_users array
-                  const mentionedUser = post.mentioned_users?.find(
-                    (user) => user.username === username
-                  );
-
-                  if (mentionedUser) {
-                    return (
-                      <Link
-                        key={index}
-                        href={`/users/${mentionedUser.id}`}
-                        className='text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
-                      >
-                        @{username}
-                      </Link>
-                    );
-                  }
-                  // If no mentioned user found, just show the text without a link
-                  return <span key={index}>{part}</span>;
-                } else if (isTopic(part)) {
-                  const topic = getTopicFromPart(part);
-                  return (
-                    <Link
-                      key={index}
-                      href={`/topics/${topic}`}
-                      className='text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
-                    >
-                      #{topic}
-                    </Link>
-                  );
-                }
-                return <span key={index}>{part}</span>;
-              })}
+              {renderContent()}
             </p>
             <div className='flex items-center space-x-2 ml-4'>
               <button
@@ -211,7 +241,7 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
             <div className='mt-4 border-t border-gray-200 dark:border-gray-800 pt-4'>
               <CommentSection
                 postId={post.id}
-                currentUserId={currentUserId}
+                currentUserId={post.user_id}
                 onCommentChange={loadCommentCount}
               />
             </div>

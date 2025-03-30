@@ -6,6 +6,8 @@ import { Post } from './types/post';
 import { getPosts } from './utils/postService';
 import ComposePost from './components/ComposePost';
 import PostsSection from './components/PostsSection';
+import { PostCard } from './components/PostCard';
+import { HotTopicsSidebar } from './components/HotTopicsSidebar';
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -44,19 +46,20 @@ export default function HomePage() {
   }
 
   return (
-    <div className='max-w-2xl mx-auto'>
-      {user && <ComposePost onPostCreated={handlePostCreated} />}
-      <PostsSection
-        posts={posts}
-        isLoading={loading}
-        currentUserId={user?.id || ''}
-        onPostDeleted={handlePostDeleted}
-        emptyMessage={
-          !user
-            ? 'Sign in to create posts and join the conversation!'
-            : 'No posts found. Create a post or follow users to see their posts here!'
-        }
-      />
-    </div>
+    <main className='container mx-auto px-4 py-8'>
+      <div className='grid grid-cols-1 lg:grid-cols-12 gap-8'>
+        <div className='lg:col-span-8'>
+          {user && <ComposePost onPostCreated={handlePostCreated} />}
+          <div className='mt-8 space-y-4'>
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} onPostDeleted={handlePostDeleted} />
+            ))}
+          </div>
+        </div>
+        <div className='lg:col-span-4'>
+          <HotTopicsSidebar />
+        </div>
+      </div>
+    </main>
   );
 }
