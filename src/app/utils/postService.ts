@@ -287,7 +287,7 @@ export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
       .select(
         `
         *,
-        profiles!posts_user_id_fkey (
+        profiles:user_id (
           username,
           avatar_url
         )
@@ -301,14 +301,95 @@ export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
       throw error;
     }
 
+    if (!data) {
+      return [];
+    }
+
+    // Get all mentioned user IDs from all posts
+    const allMentionedUserIds = data
+      .flatMap((post) => post.mentions || [])
+      .filter((id): id is string => id !== null);
+
+    // Fetch mentioned users' information in a single query
+    const { data: mentionedUsers } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('id', allMentionedUserIds);
+
+    // Create a map of user IDs to usernames
+    const mentionedUsersMap = new Map(
+      mentionedUsers?.map((user: { id: string; username: string }) => [user.id, user]) || []
+    );
+
     // Transform the data to match the Post type
-    return (data || []).map((post) => ({
+    return data.map((post) => ({
       ...post,
       username: post.profiles.username,
       avatar_url: post.profiles.avatar_url,
+      mentions: post.mentions || [],
+      mentioned_users: (post.mentions || [])
+        .map((id: string) => mentionedUsersMap.get(id))
+        .filter((user): user is { id: string; username: string } => user !== undefined),
     }));
   } catch (error) {
     console.error('Error in getPostsByUserId:', error);
+    throw error;
+  }
+};
+
+export const getPostsMentioningUser = async (userId: string): Promise<Post[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(
+        `
+        *,
+        profiles:user_id (
+          username,
+          avatar_url
+        )
+      `
+      )
+      .contains('mentions', [userId])
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching posts:', error);
+      throw error;
+    }
+
+    if (!data) {
+      return [];
+    }
+
+    // Get all mentioned user IDs from all posts
+    const allMentionedUserIds = data
+      .flatMap((post) => post.mentions || [])
+      .filter((id): id is string => id !== null);
+
+    // Fetch mentioned users' information in a single query
+    const { data: mentionedUsers } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('id', allMentionedUserIds);
+
+    // Create a map of user IDs to usernames
+    const mentionedUsersMap = new Map(
+      mentionedUsers?.map((user: { id: string; username: string }) => [user.id, user]) || []
+    );
+
+    // Transform the data to match the Post type
+    return data.map((post) => ({
+      ...post,
+      username: post.profiles.username,
+      avatar_url: post.profiles.avatar_url,
+      mentions: post.mentions || [],
+      mentioned_users: (post.mentions || [])
+        .map((id: string) => mentionedUsersMap.get(id))
+        .filter((user): user is { id: string; username: string } => user !== undefined),
+    }));
+  } catch (error) {
+    console.error('Error in getPostsMentioningUser:', error);
     throw error;
   }
 };

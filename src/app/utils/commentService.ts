@@ -112,3 +112,67 @@ export const getCommentCount = async (postId: string): Promise<number> => {
     return 0;
   }
 };
+
+export const getCommentsByUserId = async (userId: string): Promise<Comment[]> => {
+  try {
+    // First, get all comments for the user
+    const { data: comments, error: commentsError } = await supabase
+      .from('comments')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (commentsError) throw commentsError;
+
+    // Then, get the user's profile
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('username, avatar_url')
+      .eq('id', userId)
+      .single();
+
+    if (profileError) throw profileError;
+
+    // Get all unique post IDs from the comments
+    const postIds = [...new Set(comments.map((comment) => comment.post_id))];
+
+    // Fetch posts and their authors
+    const { data: posts, error: postsError } = await supabase
+      .from('posts')
+      .select(
+        `
+        *,
+        profiles:user_id (
+          username,
+          avatar_url
+        )
+      `
+      )
+      .in('id', postIds);
+
+    if (postsError) throw postsError;
+
+    // Create a map of post IDs to posts for easy lookup
+    const postMap = new Map(
+      posts.map((post) => [
+        post.id,
+        {
+          ...post,
+          username: post.profiles?.username,
+          avatar_url: post.profiles?.avatar_url,
+        },
+      ])
+    );
+
+    // Combine comments with the profile data and post data
+    return (comments || []).map((comment) => ({
+      ...comment,
+      username: profile.username,
+      avatar_url: profile.avatar_url,
+      post: postMap.get(comment.post_id),
+    }));
+  } catch (error) {
+    console.error('Error fetching user comments:', error);
+    return [];
+  }
+};

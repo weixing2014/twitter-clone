@@ -5,6 +5,8 @@ import { useAuth } from '../context/AuthContext';
 import UserDropdown from './UserDropdown';
 
 function NavLinks() {
+  const { user } = useAuth();
+
   return (
     <div className='flex items-center space-x-8'>
       <Link
@@ -25,6 +27,14 @@ function NavLinks() {
       >
         Users
       </Link>
+      {user && (
+        <Link
+          href='/mentions'
+          className='text-gray-700 dark:text-gray-200 hover:text-blue-500 dark:hover:text-blue-400'
+        >
+          @Me
+        </Link>
+      )}
     </div>
   );
 }
