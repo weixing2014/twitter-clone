@@ -3,61 +3,65 @@ import { Post } from '../types/post';
 
 export const createPost = async (
   content: string,
-  imageUrls: string[] = [],
-  userId?: string
-): Promise<Post | null> => {
+  userId: string,
+  imageUrls: string[] = []
+): Promise<Post> => {
   try {
-    if (!userId) {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-      userId = user.id;
-    }
+    // Extract mentioned usernames from content
+    const mentionMatches = content.match(/@([^\s]+(?:\s+[^\s]+)*)/g) || [];
+    const mentionedUsernames = mentionMatches.map((match) => match.slice(1));
 
-    // Extract mentions from content
-    const mentionRegex = /@([^\s]+(?:\s+[^\s]+)*)/g;
-    const mentions: string[] = [];
-    let match;
-    console.log('Content to process for mentions:', content);
-
-    while ((match = mentionRegex.exec(content)) !== null) {
-      const username = match[1];
-      console.log('Found mention:', username);
-
-      // Get user ID from username
-      const { data: user, error: userError } = await supabase
+    // Get mentioned users' IDs
+    let mentions: string[] = [];
+    let mentionedUsers: { id: string; username: string; avatar_url: string | null }[] = [];
+    if (mentionedUsernames.length > 0) {
+      const { data: users, error: mentionedUsersError } = await supabase
         .from('profiles')
-        .select('id, username')
-        .eq('username', username)
-        .single();
+        .select('id, username, avatar_url')
+        .in('username', mentionedUsernames);
 
-      if (userError) {
-        console.error('Error fetching user for mention:', username, userError);
-        continue;
-      }
+      if (mentionedUsersError) throw mentionedUsersError;
+      mentionedUsers = users || [];
+      mentions = mentionedUsers.map((user) => user.id);
+    }
 
-      if (user) {
-        console.log('Found user ID for mention:', username, user.id);
-        mentions.push(user.id);
-      } else {
-        console.log('No user found for mention:', username);
+    // Extract topics from content
+    const topicMatches = content.match(/#([a-zA-Z0-9_]+)/g) || [];
+    const topicNames = topicMatches.map((match) => match.slice(1));
+
+    // Insert topics into the topics table if they don't exist and get their IDs
+    let topicIds: string[] = [];
+    if (topicNames.length > 0) {
+      // First, insert the topics
+      const { error: insertError } = await supabase.from('topics').upsert(
+        topicNames.map((name) => ({ name })),
+        { onConflict: 'name' }
+      );
+
+      if (insertError) throw insertError;
+
+      // Then, get the topic IDs
+      const { data: topics, error: selectError } = await supabase
+        .from('topics')
+        .select('id')
+        .in('name', topicNames);
+
+      if (selectError) throw selectError;
+      if (topics) {
+        topicIds = topics.map((topic) => topic.id);
       }
     }
 
-    console.log('Final mentions array:', mentions);
-
-    // Create post with mentions
-    const { data: post, error } = await supabase
+    // Create the post
+    const { data: post, error: postError } = await supabase
       .from('posts')
-      .insert([
-        {
-          content,
-          user_id: userId,
-          image_urls: imageUrls,
-          mentions: mentions,
-        },
-      ])
+      .insert({
+        content,
+        user_id: userId,
+        image_urls: imageUrls,
+        mentions: mentions.length > 0 ? mentions : null,
+        topics: topicIds.length > 0 ? topicIds : null,
+      })
       .select(
         `
         *,
@@ -69,37 +73,26 @@ export const createPost = async (
       )
       .single();
 
-    if (error) {
-      console.error('Error creating post:', error);
-      throw error;
+    if (postError) {
+      console.error('Post creation error:', postError);
+      throw postError;
     }
 
-    console.log('Created post with mentions:', post);
-
-    // Fetch mentioned users' information
-    const { data: mentionedUsers } = await supabase
-      .from('profiles')
-      .select('id, username')
-      .in('id', mentions);
+    if (!post) {
+      throw new Error('Post creation failed');
+    }
 
     // Transform the data to match the Post type
     return {
-      id: post.id,
-      content: post.content,
-      user_id: post.user_id,
-      username: post.profiles.username,
-      avatar_url: post.profiles.avatar_url,
-      image_urls: post.image_urls,
-      created_at: post.created_at,
-      likes_count: 0,
-      comments_count: 0,
-      is_liked: false,
-      mentions: post.mentions,
-      mentioned_users: mentionedUsers || [],
+      ...post,
+      username: post.profiles?.username,
+      avatar_url: post.profiles?.avatar_url,
+      mentioned_users: mentionedUsers,
+      topics: topicIds,
     };
   } catch (error) {
     console.error('Error creating post:', error);
-    return null;
+    throw error;
   }
 };
 

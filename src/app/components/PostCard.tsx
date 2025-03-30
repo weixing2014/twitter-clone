@@ -96,7 +96,8 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
           </div>
           <div className='flex items-start justify-between mt-1'>
             <p className='text-gray-900 dark:text-white whitespace-pre-wrap break-words flex-1'>
-              {post.content.split(/(@[^\s]+(?:\s+[^\s]+)*)/).map((part, index) => {
+              {(post.content || '').split(/(@[^\s]+(?:\s+[^\s]+)*)|(#\w+)/).map((part, index) => {
+                if (!part) return null;
                 if (part.startsWith('@')) {
                   const username = part.slice(1);
                   // Find the mentioned user from the mentioned_users array
@@ -117,6 +118,17 @@ export const PostCard = ({ post, currentUserId, onPostDeleted }: PostCardProps) 
                   }
                   // If no mentioned user found, just show the text without a link
                   return part;
+                } else if (part.startsWith('#')) {
+                  const topic = part.slice(1);
+                  return (
+                    <Link
+                      key={index}
+                      href={`/topics/${topic}`}
+                      className='text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300'
+                    >
+                      {part}
+                    </Link>
+                  );
                 }
                 return part;
               })}

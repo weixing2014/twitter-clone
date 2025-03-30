@@ -214,7 +214,7 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
       );
 
       // Create post with content and image URLs
-      const newPost = await createPost(content, imageUrls);
+      const newPost = await createPost(content, user.id, imageUrls);
       if (newPost) {
         onPostCreated(newPost);
         setContent('');
