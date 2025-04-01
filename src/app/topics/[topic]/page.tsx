@@ -15,7 +15,7 @@ export default function TopicPage({ params }: { params: Promise<{ topic: string 
 
   const loadPosts = async () => {
     try {
-      const fetchedPosts = await getPostsByTopic(resolvedParams.topic, user?.id);
+      const fetchedPosts = await getPostsByTopic(resolvedParams.topic);
       setPosts(fetchedPosts);
     } catch (error) {
       console.error('Error loading topic posts:', error);

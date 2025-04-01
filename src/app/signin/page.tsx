@@ -13,13 +13,7 @@ function SignInContent() {
     try {
       setError('');
       setSuccessMessage('');
-
-      const { error } = await signInWithGoogle();
-
-      if (error) {
-        console.error('Google sign in error:', error);
-        setError('Failed to sign in with Google. Please try again.');
-      }
+      await signInWithGoogle();
     } catch (error) {
       console.error('Error during Google sign-in:', error);
       setError('An unexpected error occurred. Please try again.');

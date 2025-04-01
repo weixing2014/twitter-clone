@@ -30,7 +30,7 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
   const [topicSuggestions, setTopicSuggestions] = useState<{ id: string; name: string }[]>([]);
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [showTopicSuggestions, setShowTopicSuggestions] = useState(false);
-  const [cursorPosition, setCursorPosition] = useState(0);
+  const [, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);

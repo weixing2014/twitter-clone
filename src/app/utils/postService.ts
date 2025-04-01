@@ -1,7 +1,6 @@
-import { supabase } from './supabase';
 import { Post } from '../types/post';
 import { extractMentions, extractTopics } from '../utils/parsers';
-import { User } from '@supabase/supabase-js';
+import { supabase } from './supabase';
 
 export const createPost = async (content: string, imageUrls: string[] = []) => {
   const {
@@ -167,7 +166,11 @@ export const getPosts = async (
         mentions: post.mentions || [],
         mentioned_users: (post.mentions || [])
           .map((id: string) => mentionedUsersMap.get(id))
-          .filter((user): user is { id: string; username: string } => user !== undefined),
+          .filter(
+            (
+              user: { id: string; username: string } | undefined
+            ): user is { id: string; username: string } => user !== undefined
+          ),
       }));
 
     return transformedPosts;
@@ -310,7 +313,11 @@ export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
       mentions: post.mentions || [],
       mentioned_users: (post.mentions || [])
         .map((id: string) => mentionedUsersMap.get(id))
-        .filter((user): user is { id: string; username: string } => user !== undefined),
+        .filter(
+          (
+            user: { id: string; username: string } | undefined
+          ): user is { id: string; username: string } => user !== undefined
+        ),
     }));
   } catch (error) {
     console.error('Error in getPostsByUserId:', error);
@@ -367,7 +374,11 @@ export const getPostsMentioningUser = async (userId: string): Promise<Post[]> =>
       mentions: post.mentions || [],
       mentioned_users: (post.mentions || [])
         .map((id: string) => mentionedUsersMap.get(id))
-        .filter((user): user is { id: string; username: string } => user !== undefined),
+        .filter(
+          (
+            user: { id: string; username: string } | undefined
+          ): user is { id: string; username: string } => user !== undefined
+        ),
     }));
   } catch (error) {
     console.error('Error in getPostsMentioningUser:', error);

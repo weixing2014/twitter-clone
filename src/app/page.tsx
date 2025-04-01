@@ -5,7 +5,6 @@ import { useAuth } from './context/AuthContext';
 import { Post } from './types/post';
 import { getPosts } from './utils/postService';
 import ComposePost from './components/ComposePost';
-import PostsSection from './components/PostsSection';
 import { PostCard } from './components/PostCard';
 import { HotTopicsSidebar } from './components/HotTopicsSidebar';
 

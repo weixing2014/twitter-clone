@@ -21,6 +21,7 @@ import {
 interface PostCardProps {
   post: Post;
   onPostDeleted: (postId: string) => void;
+  currentUserId?: string;
 }
 
 export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {

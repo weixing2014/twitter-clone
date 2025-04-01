@@ -7,4 +7,11 @@ export interface Comment {
   updated_at: string;
   username?: string;
   avatar_url?: string;
+  post: {
+    content: string;
+    user: {
+      username: string;
+      avatar_url: string | null;
+    };
+  };
 }

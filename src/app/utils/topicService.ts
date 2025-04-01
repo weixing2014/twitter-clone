@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { Post } from '../types/post';
 
-export const getPostsByTopic = async (topic: string, currentUserId?: string): Promise<Post[]> => {
+export const getPostsByTopic = async (topic: string): Promise<Post[]> => {
   try {
     // First, get the topic ID by name
     const { data: topicData, error: topicError } = await supabase
@@ -65,9 +65,11 @@ export const getPostsByTopic = async (topic: string, currentUserId?: string): Pr
       avatar_url: post.profiles?.avatar_url,
       mentions: post.mentions || [],
       mentioned_users: (post.mentions || [])
-        .map((id) => mentionedUsersMap.get(id))
+        .map((id: string) => mentionedUsersMap.get(id))
         .filter(
-          (user): user is { id: string; username: string; avatar_url: string | null } =>
+          (
+            user: { id: string; username: string; avatar_url: string | null } | undefined
+          ): user is { id: string; username: string; avatar_url: string | null } =>
             user !== undefined
         ),
     }));
@@ -90,7 +92,7 @@ export const getTrendingTopics = async (limit: number = 10): Promise<string[]> =
     // Count topic occurrences
     const topicCounts = new Map<string, number>();
     data?.forEach((post) => {
-      post.topics?.forEach((topicId) => {
+      post.topics?.forEach((topicId: string) => {
         topicCounts.set(topicId, (topicCounts.get(topicId) || 0) + 1);
       });
     });
