@@ -31,7 +31,6 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
   const [commentCount, setCommentCount] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [mentionedUsers, setMentionedUsers] = useState<{ id: string; username: string }[]>([]);
-  const [parsedContent, setParsedContent] = useState(post.content);
   const formattedDate = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
   const { user } = useAuth();
   const isCurrentUserPost = user?.id === post.user_id;
@@ -66,19 +65,7 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
 
       if (!error && users) {
         setMentionedUsers(users);
-
-        // Parse content and replace user IDs with usernames
-        let processedContent = post.content;
-        users.forEach((user) => {
-          processedContent = processedContent.replace(
-            new RegExp(`@${user.id}\\b`, 'g'),
-            `@${user.username}`
-          );
-        });
-        setParsedContent(processedContent);
       }
-    } else {
-      setParsedContent(post.content);
     }
   };
 
@@ -102,7 +89,7 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
   };
 
   const renderContent = () => {
-    const parts = splitContent(parsedContent);
+    const parts = splitContent(post.content);
     return parts.map((part, index) => {
       if (isMention(part)) {
         const username = getUsernameFromMention(part);

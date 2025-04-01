@@ -1,26 +1,64 @@
 import { supabase } from './supabase';
-import { Post } from '../types/post';
+import { Post, MentionedUser } from '../types/post';
 
-export const getPostsByTopic = async (topic: string): Promise<Post[]> => {
+interface RawPost {
+  id: string;
+  content: string;
+  created_at: string;
+  user_id: string;
+  image_urls: string[] | null;
+  likes: number | null;
+  topics: string[] | null;
+  mentions: string[] | null;
+  profiles: {
+    username: string;
+    avatar_url: string | null;
+  };
+}
+
+const transformPost = (post: RawPost, mentionedUsersMap: Map<string, MentionedUser>): Post => {
+  // Convert user IDs to usernames in the content
+  let processedContent = post.content;
+  if (post.mentions && post.mentions.length > 0) {
+    post.mentions.forEach((userId: string) => {
+      const mentionedUser = mentionedUsersMap.get(userId);
+      if (mentionedUser) {
+        // Use word boundary to avoid partial matches
+        processedContent = processedContent.replace(
+          new RegExp(`@${userId}\\b`, 'g'),
+          `@${mentionedUser.username}`
+        );
+      }
+    });
+  }
+
+  return {
+    id: post.id,
+    content: processedContent,
+    created_at: post.created_at,
+    user_id: post.user_id,
+    username: post.profiles.username || 'Deleted User',
+    avatar_url: post.profiles.avatar_url,
+    image_urls: post.image_urls || [],
+    topics: post.topics || [],
+    mentions: post.mentions || [],
+    likes_count: post.likes || 0,
+  };
+};
+
+export const getPostsByTopic = async (topicName: string): Promise<Post[]> => {
   try {
-    // First, get the topic ID by name
-    const { data: topicData, error: topicError } = await supabase
+    // First, get the topic ID
+    const { data: topic, error: topicError } = await supabase
       .from('topics')
       .select('id')
-      .eq('name', topic)
+      .eq('name', topicName)
       .single();
 
-    if (topicError) {
-      console.error('Error fetching topic:', topicError);
-      return [];
-    }
+    if (topicError) throw topicError;
+    if (!topic) return [];
 
-    if (!topicData) {
-      console.log('Topic not found');
-      return [];
-    }
-
-    // Get posts containing this topic ID
+    // Get posts with this topic
     const { data: posts, error: postsError } = await supabase
       .from('posts')
       .select(
@@ -32,17 +70,11 @@ export const getPostsByTopic = async (topic: string): Promise<Post[]> => {
         )
       `
       )
-      .contains('topics', [topicData.id])
+      .contains('topics', [topic.id])
       .order('created_at', { ascending: false });
 
-    if (postsError) {
-      console.error('Error fetching posts:', postsError);
-      return [];
-    }
-
-    if (!posts) {
-      return [];
-    }
+    if (postsError) throw postsError;
+    if (!posts) return [];
 
     // Get all mentioned user IDs from all posts
     const allMentionedUserIds = posts
@@ -52,29 +84,20 @@ export const getPostsByTopic = async (topic: string): Promise<Post[]> => {
     // Fetch mentioned users' information in a single query
     const { data: mentionedUsers } = await supabase
       .from('profiles')
-      .select('id, username, avatar_url')
+      .select('id, username')
       .in('id', allMentionedUserIds);
 
-    // Create a map of user IDs to user information
-    const mentionedUsersMap = new Map(mentionedUsers?.map((user) => [user.id, user]) || []);
+    // Create a map of user IDs to usernames
+    const mentionedUsersMap = new Map(
+      mentionedUsers?.map((user: MentionedUser) => [user.id, user]) || []
+    );
 
     // Transform the data to match the Post type
-    return posts.map((post) => ({
-      ...post,
-      username: post.profiles?.username || 'Deleted User',
-      avatar_url: post.profiles?.avatar_url,
-      mentions: post.mentions || [],
-      mentioned_users: (post.mentions || [])
-        .map((id: string) => mentionedUsersMap.get(id))
-        .filter(
-          (
-            user: { id: string; username: string; avatar_url: string | null } | undefined
-          ): user is { id: string; username: string; avatar_url: string | null } =>
-            user !== undefined
-        ),
-    }));
+    return posts
+      .filter((post) => post.profiles) // Only include posts with valid profiles
+      .map((post) => transformPost(post as RawPost, mentionedUsersMap));
   } catch (error) {
-    console.error('Error in getPostsByTopic:', error);
+    console.error('Error fetching posts by topic:', error);
     return [];
   }
 };

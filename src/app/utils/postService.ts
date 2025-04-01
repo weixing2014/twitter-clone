@@ -1,6 +1,51 @@
-import { Post } from '../types/post';
+import { Post, MentionedUser } from '../types/post';
 import { extractMentions, extractTopics } from '../utils/parsers';
 import { supabase } from './supabase';
+
+interface RawPost {
+  id: string;
+  content: string;
+  created_at: string;
+  user_id: string;
+  image_urls: string[] | null;
+  likes: number | null;
+  topics: string[] | null;
+  mentions: string[] | null;
+  profiles: {
+    username: string;
+    avatar_url: string | null;
+  };
+}
+
+const transformPost = (post: RawPost, mentionedUsersMap: Map<string, MentionedUser>): Post => {
+  // Convert user IDs to usernames in the content
+  let processedContent = post.content;
+  if (post.mentions && post.mentions.length > 0) {
+    post.mentions.forEach((userId: string) => {
+      const mentionedUser = mentionedUsersMap.get(userId);
+      if (mentionedUser) {
+        // Use word boundary to avoid partial matches
+        processedContent = processedContent.replace(
+          new RegExp(`@${userId}\\b`, 'g'),
+          `@${mentionedUser.username}`
+        );
+      }
+    });
+  }
+
+  return {
+    id: post.id,
+    content: processedContent,
+    created_at: post.created_at,
+    user_id: post.user_id,
+    username: post.profiles.username || 'Deleted User',
+    avatar_url: post.profiles.avatar_url,
+    image_urls: post.image_urls || [],
+    topics: post.topics || [],
+    mentions: post.mentions || [],
+    likes_count: post.likes || 0,
+  };
+};
 
 export const createPost = async (content: string, imageUrls: string[] = []) => {
   const {
@@ -12,6 +57,7 @@ export const createPost = async (content: string, imageUrls: string[] = []) => {
   const mentionedUsernames = extractMentions(content);
   const mentions: string[] = [];
   let processedContent = content;
+  let mentionedUsers: { id: string; username: string }[] | null = null;
 
   if (mentionedUsernames.length > 0) {
     const { data: users, error: userError } = await supabase
@@ -20,14 +66,15 @@ export const createPost = async (content: string, imageUrls: string[] = []) => {
       .in('username', mentionedUsernames);
 
     if (userError) throw userError;
+    mentionedUsers = users;
 
     // Replace usernames with user IDs in the content
-    users?.forEach((user) => {
+    mentionedUsers?.forEach((mentionedUser) => {
       processedContent = processedContent.replace(
-        new RegExp(`@${user.username}\\b`, 'g'),
-        `@${user.id}`
+        new RegExp(`@${mentionedUser.username}\\b`, 'g'),
+        `@${mentionedUser.id}`
       );
-      mentions.push(user.id);
+      mentions.push(mentionedUser.id);
     });
   }
 
@@ -75,12 +122,18 @@ export const createPost = async (content: string, imageUrls: string[] = []) => {
 
   if (error) throw error;
 
+  // Create a map of mentioned users
+  const mentionedUsersMap = new Map<string, MentionedUser>(
+    (data.mentions || []).map((id: string) => {
+      const mentionedUser = mentionedUsers?.find(
+        (user: { id: string; username: string }) => user.id === id
+      );
+      return [id, { id, username: mentionedUser?.username || 'Unknown User' }];
+    })
+  );
+
   // Transform the data to match the Post type
-  return {
-    ...data,
-    username: data.profiles?.username || 'Deleted User',
-    avatar_url: data.profiles?.avatar_url,
-  };
+  return transformPost(data as RawPost, mentionedUsersMap);
 };
 
 export const getPosts = async (
@@ -153,27 +206,13 @@ export const getPosts = async (
 
     // Create a map of user IDs to usernames
     const mentionedUsersMap = new Map(
-      mentionedUsers?.map((user: { id: string; username: string }) => [user.id, user]) || []
+      mentionedUsers?.map((user: MentionedUser) => [user.id, user]) || []
     );
 
     // Transform the data to match the Post type
-    const transformedPosts = data
+    return data
       .filter((post) => post.profiles) // Only include posts with valid profiles
-      .map((post) => ({
-        ...post,
-        username: post.profiles.username || 'Deleted User',
-        avatar_url: post.profiles.avatar_url,
-        mentions: post.mentions || [],
-        mentioned_users: (post.mentions || [])
-          .map((id: string) => mentionedUsersMap.get(id))
-          .filter(
-            (
-              user: { id: string; username: string } | undefined
-            ): user is { id: string; username: string } => user !== undefined
-          ),
-      }));
-
-    return transformedPosts;
+      .map((post) => transformPost(post as RawPost, mentionedUsersMap));
   } catch (error) {
     console.error('Error in getPosts:', error);
     return [];
@@ -228,38 +267,55 @@ export const deletePost = async (postId: string): Promise<void> => {
 // Get posts from users the current user is following
 export const getFollowingPosts = async (currentUserId: string): Promise<Post[]> => {
   try {
-    // First, get the IDs of users the current user is following
-    const { data: followings, error: followingsError } = await supabase
+    const { data, error } = await supabase
+      .from('posts')
+      .select(
+        `
+        *,
+        profiles:user_id (
+          username,
+          avatar_url
+        )
+      `
+      )
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    if (!data) return [];
+
+    // Get the users that the current user follows
+    const { data: followingData } = await supabase
       .from('follows')
       .select('following_id')
       .eq('follower_id', currentUserId);
 
-    if (followingsError) {
-      throw followingsError;
-    }
+    const followingIds = followingData?.map((follow) => follow.following_id) || [];
 
-    // If not following anyone yet, return empty array
-    if (!followings || followings.length === 0) {
-      return [];
-    }
+    // Filter posts to only include posts from followed users
+    const followingPosts = data.filter((post) => followingIds.includes(post.user_id));
 
-    // Extract the user IDs
-    const followingIds = followings.map((follow) => follow.following_id);
+    // Get all mentioned user IDs from all posts
+    const allMentionedUserIds = followingPosts
+      .flatMap((post) => post.mentions || [])
+      .filter((id): id is string => id !== null);
 
-    // Get posts from these users
-    const { data: posts, error: postsError } = await supabase
-      .from('posts')
-      .select('*')
-      .in('user_id', followingIds)
-      .order('created_at', { ascending: false });
+    // Fetch mentioned users' information in a single query
+    const { data: mentionedUsers } = await supabase
+      .from('profiles')
+      .select('id, username')
+      .in('id', allMentionedUserIds);
 
-    if (postsError) {
-      throw postsError;
-    }
+    // Create a map of user IDs to usernames
+    const mentionedUsersMap = new Map(
+      mentionedUsers?.map((user: MentionedUser) => [user.id, user]) || []
+    );
 
-    return posts || [];
+    // Transform the data to match the Post type
+    return followingPosts
+      .filter((post) => post.profiles) // Only include posts with valid profiles
+      .map((post) => transformPost(post as RawPost, mentionedUsersMap));
   } catch (error) {
-    console.error('Error fetching following posts:', error);
+    console.error('Error in getFollowingPosts:', error);
     return [];
   }
 };
@@ -280,14 +336,8 @@ export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching posts:', error);
-      throw error;
-    }
-
-    if (!data) {
-      return [];
-    }
+    if (error) throw error;
+    if (!data) return [];
 
     // Get all mentioned user IDs from all posts
     const allMentionedUserIds = data
@@ -302,26 +352,16 @@ export const getPostsByUserId = async (userId: string): Promise<Post[]> => {
 
     // Create a map of user IDs to usernames
     const mentionedUsersMap = new Map(
-      mentionedUsers?.map((user: { id: string; username: string }) => [user.id, user]) || []
+      mentionedUsers?.map((user: MentionedUser) => [user.id, user]) || []
     );
 
     // Transform the data to match the Post type
-    return data.map((post) => ({
-      ...post,
-      username: post.profiles.username,
-      avatar_url: post.profiles.avatar_url,
-      mentions: post.mentions || [],
-      mentioned_users: (post.mentions || [])
-        .map((id: string) => mentionedUsersMap.get(id))
-        .filter(
-          (
-            user: { id: string; username: string } | undefined
-          ): user is { id: string; username: string } => user !== undefined
-        ),
-    }));
+    return data
+      .filter((post) => post.profiles) // Only include posts with valid profiles
+      .map((post) => transformPost(post as RawPost, mentionedUsersMap));
   } catch (error) {
     console.error('Error in getPostsByUserId:', error);
-    throw error;
+    return [];
   }
 };
 
@@ -341,14 +381,8 @@ export const getPostsMentioningUser = async (userId: string): Promise<Post[]> =>
       .contains('mentions', [userId])
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching posts:', error);
-      throw error;
-    }
-
-    if (!data) {
-      return [];
-    }
+    if (error) throw error;
+    if (!data) return [];
 
     // Get all mentioned user IDs from all posts
     const allMentionedUserIds = data
@@ -363,25 +397,15 @@ export const getPostsMentioningUser = async (userId: string): Promise<Post[]> =>
 
     // Create a map of user IDs to usernames
     const mentionedUsersMap = new Map(
-      mentionedUsers?.map((user: { id: string; username: string }) => [user.id, user]) || []
+      mentionedUsers?.map((user: MentionedUser) => [user.id, user]) || []
     );
 
     // Transform the data to match the Post type
-    return data.map((post) => ({
-      ...post,
-      username: post.profiles.username,
-      avatar_url: post.profiles.avatar_url,
-      mentions: post.mentions || [],
-      mentioned_users: (post.mentions || [])
-        .map((id: string) => mentionedUsersMap.get(id))
-        .filter(
-          (
-            user: { id: string; username: string } | undefined
-          ): user is { id: string; username: string } => user !== undefined
-        ),
-    }));
+    return data
+      .filter((post) => post.profiles) // Only include posts with valid profiles
+      .map((post) => transformPost(post as RawPost, mentionedUsersMap));
   } catch (error) {
     console.error('Error in getPostsMentioningUser:', error);
-    throw error;
+    return [];
   }
 };
