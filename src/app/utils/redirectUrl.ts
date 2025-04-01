@@ -11,5 +11,7 @@ export function getRedirectUrl(path: string = '/auth/callback'): string {
   // Ensure path starts with a /
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
 
+  console.log('redirectUrl :>> ', `${baseUrl}${normalizedPath}`);
+
   return `${baseUrl}${normalizedPath}`;
 }
