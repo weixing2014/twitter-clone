@@ -11,6 +11,7 @@ export interface Post {
   mentions: string[] | null;
   topics: string[] | null;
   created_at: string;
+  scheduled_at: string | null;
   username: string;
   avatar_url: string | null;
   likes_count?: number;

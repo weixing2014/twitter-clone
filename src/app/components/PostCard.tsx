@@ -1,14 +1,13 @@
 'use client';
 
-import Image from 'next/image';
 import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { Post } from '../types/post';
 import { deletePost } from '../utils/postService';
 import { getCommentCount } from '../utils/commentService';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import CommentSection from './CommentSection';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../context/AuthContext';
 import { supabase } from '../utils/supabase';
 import {
   splitContent,
@@ -31,7 +30,6 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
   const [commentCount, setCommentCount] = useState(0);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [mentionedUsers, setMentionedUsers] = useState<{ id: string; username: string }[]>([]);
-  const formattedDate = formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
   const { user } = useAuth();
   const isCurrentUserPost = user?.id === post.user_id;
 
@@ -50,6 +48,17 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedImage]);
+
+  // Don't render scheduled posts for non-owners
+  if (post.scheduled_at && !isCurrentUserPost) {
+    return null;
+  }
+
+  const isFuturePost = post.scheduled_at ? new Date(post.scheduled_at) > new Date() : false;
+
+  const formattedDate = isFuturePost
+    ? `Scheduled at ${format(new Date(post.scheduled_at!), 'MMM d, yyyy h:mm a')}`
+    : formatDistanceToNow(new Date(post.created_at), { addSuffix: true });
 
   const loadCommentCount = async () => {
     const count = await getCommentCount(post.id);
@@ -127,23 +136,26 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
   };
 
   return (
-    <article className='border-b border-gray-200 dark:border-gray-800 p-4 hover:bg-gray-50 dark:hover:bg-gray-900/50 transition-colors'>
-      <div className='flex space-x-3'>
+    <div className={`border-b border-gray-200 dark:border-gray-800 p-4`}>
+      <div className='flex space-x-4'>
         <div className='flex-shrink-0'>
-          <Link href={`/users/${post.user_id}`} className='block group cursor-pointer'>
-            <div className='h-12 w-12 rounded-full overflow-hidden relative bg-gray-200 dark:bg-gray-700'>
-              <Image
-                src={
-                  post.avatar_url ||
-                  `https://api.dicebear.com/7.x/avataaars/png?seed=${post.username}`
-                }
-                alt={`${post.username}'s avatar`}
-                fill
-                className='object-cover group-hover:scale-105 transition-transform duration-200'
-                sizes='48px'
+          <div className='h-12 w-12 rounded-full overflow-hidden relative bg-gray-200 dark:bg-gray-700'>
+            {post.avatar_url ? (
+              <img
+                src={post.avatar_url}
+                alt={post.username}
+                width={48}
+                height={48}
+                className='object-cover'
               />
-            </div>
-          </Link>
+            ) : (
+              <div className='w-full h-full flex items-center justify-center bg-gray-300 dark:bg-gray-600'>
+                <span className='text-gray-500 dark:text-gray-400 text-lg'>
+                  {post.username.charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         <div className='flex-1 min-w-0'>
           <div className='flex items-center space-x-1'>
@@ -157,14 +169,17 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
             <span className='text-gray-500 dark:text-gray-400'>{formattedDate}</span>
           </div>
           <div className='flex items-start justify-between mt-1'>
-            <p className='text-gray-900 dark:text-white whitespace-pre-wrap break-words flex-1'>
+            <p
+              className={`whitespace-pre-wrap break-words flex-1 ${
+                isFuturePost ? 'text-gray-400 dark:text-gray-500' : 'text-gray-900 dark:text-white'
+              }`}
+            >
               {renderContent()}
             </p>
-            <div className='flex items-center space-x-2 ml-4'>
+            <div className='flex items-center space-x-1 ml-4'>
               <button
                 onClick={() => setShowComments(!showComments)}
-                className='text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors p-1 flex items-center space-x-1 cursor-pointer'
-                aria-label='Toggle comments'
+                className='flex items-center text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors'
               >
                 <svg
                   xmlns='http://www.w3.org/2000/svg'
@@ -172,7 +187,7 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
                   viewBox='0 0 24 24'
                   strokeWidth={1.5}
                   stroke='currentColor'
-                  className='w-5 h-5'
+                  className='w-4 h-4'
                 >
                   <path
                     strokeLinecap='round'
@@ -180,9 +195,7 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
                     d='M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z'
                   />
                 </svg>
-                {commentCount > 0 && (
-                  <span className='text-sm text-gray-500 dark:text-gray-400'>{commentCount}</span>
-                )}
+                <span className='ml-1 text-sm'>{commentCount}</span>
               </button>
               {isCurrentUserPost && (
                 <button
@@ -196,7 +209,7 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
                     viewBox='0 0 24 24'
                     strokeWidth={1.5}
                     stroke='currentColor'
-                    className='w-5 h-5'
+                    className='w-4 h-4'
                   >
                     <path
                       strokeLinecap='round'
@@ -297,7 +310,7 @@ export const PostCard = ({ post, onPostDeleted }: PostCardProps) => {
           </div>
         </div>
       )}
-    </article>
+    </div>
   );
 };
 

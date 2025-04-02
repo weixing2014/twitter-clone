@@ -30,10 +30,15 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
   const [topicSuggestions, setTopicSuggestions] = useState<{ id: string; name: string }[]>([]);
   const [showMentionSuggestions, setShowMentionSuggestions] = useState(false);
   const [showTopicSuggestions, setShowTopicSuggestions] = useState(false);
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState<string>('');
   const [, setCursorPosition] = useState(0);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dropZoneRef = useRef<HTMLDivElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
+  const schedulePickerRef = useRef<HTMLDivElement>(null);
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
+  const [successMessage] = useState('');
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -47,6 +52,9 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
       if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
         setShowMentionSuggestions(false);
         setShowTopicSuggestions(false);
+      }
+      if (schedulePickerRef.current && !schedulePickerRef.current.contains(event.target as Node)) {
+        setShowSchedulePicker(false);
       }
     };
 
@@ -259,6 +267,14 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
     }
   };
 
+  const handleScheduleClick = () => {
+    setShowSchedulePicker(true);
+  };
+
+  const handleScheduleTimeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setScheduledTime(e.target.value);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!content.trim() && imagePreviews.length === 0) return;
@@ -287,11 +303,24 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
       );
 
       // Create post with content and image URLs
-      const newPost = await createPost(content, imageUrls);
-      if (newPost) {
-        onPostCreated(newPost);
-        setContent('');
-        setImagePreviews([]);
+      if (scheduledTime) {
+        const newPost = await createPost(content, imageUrls, new Date(scheduledTime));
+        if (newPost) {
+          onPostCreated(newPost);
+        }
+      } else {
+        const newPost = await createPost(content, imageUrls);
+        if (newPost) {
+          onPostCreated(newPost);
+        }
+      }
+      setContent('');
+      setImagePreviews([]);
+      setScheduledTime('');
+      setShowSchedulePicker(false);
+      if (!scheduledTime) {
+        setShowSuccessBanner(true);
+        setTimeout(() => setShowSuccessBanner(false), 3000);
       }
     } catch (error) {
       console.error('Error creating post:', error);
@@ -347,6 +376,42 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
 
   return (
     <div className='border-b border-gray-200 dark:border-gray-800 p-4'>
+      {showSuccessBanner && (
+        <div className='mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex items-center justify-between'>
+          <div className='flex items-center space-x-2'>
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              fill='none'
+              viewBox='0 0 24 24'
+              strokeWidth={1.5}
+              stroke='currentColor'
+              className='w-5 h-5 text-green-500'
+            >
+              <path
+                strokeLinecap='round'
+                strokeLinejoin='round'
+                d='M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
+              />
+            </svg>
+            <p className='text-green-700 dark:text-green-300'>{successMessage}</p>
+          </div>
+          <button
+            onClick={() => setShowSuccessBanner(false)}
+            className='text-green-500 hover:text-green-600 dark:hover:text-green-400'
+          >
+            <svg
+              xmlns='http://www.w3.org/2000/svg'
+              fill='none'
+              viewBox='0 0 24 24'
+              strokeWidth={1.5}
+              stroke='currentColor'
+              className='w-5 h-5'
+            >
+              <path strokeLinecap='round' strokeLinejoin='round' d='M6 18L18 6M6 6l12 12' />
+            </svg>
+          </button>
+        </div>
+      )}
       <form onSubmit={handleSubmit} className='space-y-4'>
         <div className='flex space-x-4'>
           <div className='flex-shrink-0'>
@@ -508,6 +573,29 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
                     />
                   </svg>
                 </label>
+                <button
+                  type='button'
+                  onClick={handleScheduleClick}
+                  className='relative p-1 text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400 transition-colors'
+                >
+                  <svg
+                    xmlns='http://www.w3.org/2000/svg'
+                    fill='none'
+                    viewBox='0 0 24 24'
+                    strokeWidth={1.5}
+                    stroke='currentColor'
+                    className='w-6 h-6'
+                  >
+                    <path
+                      strokeLinecap='round'
+                      strokeLinejoin='round'
+                      d='M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z'
+                    />
+                  </svg>
+                  {scheduledTime && (
+                    <span className='absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full'></span>
+                  )}
+                </button>
                 <div
                   className={`text-sm ${
                     isOverLimit ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'
@@ -523,12 +611,36 @@ const ComposePost = ({ onPostCreated }: ComposePostProps) => {
                 }
                 className='px-4 py-2 rounded-full bg-blue-500 text-white font-medium hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors'
               >
-                {isSubmitting ? 'Posting...' : 'Post'}
+                {isSubmitting ? 'Posting...' : scheduledTime ? 'Schedule' : 'Post'}
               </button>
             </div>
           </div>
         </div>
       </form>
+
+      {/* Schedule Picker Popup */}
+      {showSchedulePicker && (
+        <div
+          ref={schedulePickerRef}
+          className='absolute z-50 mt-2 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-4'
+        >
+          <div className='flex flex-col space-y-4'>
+            <h3 className='text-sm font-medium text-gray-900 dark:text-white'>Schedule Post</h3>
+            <input
+              type='datetime-local'
+              value={scheduledTime}
+              onChange={handleScheduleTimeChange}
+              min={new Date().toLocaleString('sv').slice(0, 16)}
+              className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400'
+            />
+            {scheduledTime && (
+              <p className='text-sm text-gray-500 dark:text-gray-400'>
+                Post will be published on {new Date(scheduledTime).toLocaleString()}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

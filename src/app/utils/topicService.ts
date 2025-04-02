@@ -10,6 +10,7 @@ interface RawPost {
   likes: number | null;
   topics: string[] | null;
   mentions: string[] | null;
+  scheduled_at: string | null;
   profiles: {
     username: string;
     avatar_url: string | null;
@@ -36,6 +37,7 @@ const transformPost = (post: RawPost, mentionedUsersMap: Map<string, MentionedUs
     id: post.id,
     content: processedContent,
     created_at: post.created_at,
+    scheduled_at: post.scheduled_at,
     user_id: post.user_id,
     username: post.profiles.username || 'Deleted User',
     avatar_url: post.profiles.avatar_url,

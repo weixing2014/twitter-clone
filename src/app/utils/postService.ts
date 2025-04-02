@@ -11,6 +11,7 @@ interface RawPost {
   likes: number | null;
   topics: string[] | null;
   mentions: string[] | null;
+  scheduled_at: string | null;
   profiles: {
     username: string;
     avatar_url: string | null;
@@ -44,10 +45,11 @@ const transformPost = (post: RawPost, mentionedUsersMap: Map<string, MentionedUs
     topics: post.topics || [],
     mentions: post.mentions || [],
     likes_count: post.likes || 0,
+    scheduled_at: post.scheduled_at,
   };
 };
 
-export const createPost = async (content: string, imageUrls: string[] = []) => {
+export const createPost = async (content: string, imageUrls: string[] = [], scheduledAt?: Date) => {
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -107,6 +109,7 @@ export const createPost = async (content: string, imageUrls: string[] = []) => {
         image_urls: imageUrlsArray,
         mentions: mentions.length > 0 ? mentions : null,
         topics: topics.length > 0 ? topics : null,
+        scheduled_at: scheduledAt?.toISOString() || null,
       },
     ])
     .select(
@@ -121,6 +124,8 @@ export const createPost = async (content: string, imageUrls: string[] = []) => {
     .single();
 
   if (error) throw error;
+
+  console.log('Created post data:', data);
 
   // Create a map of mentioned users
   const mentionedUsersMap = new Map<string, MentionedUser>(
@@ -174,6 +179,12 @@ export const getPosts = async (
 
       // Add the filter for specific users
       query = query.in('user_id', userIds);
+
+      // For the current user, include their scheduled posts
+      // For other users, only show non-scheduled posts
+      query = query.or(
+        `user_id.eq.${currentUserId},and(scheduled_at.is.null,user_id.in.(${userIds.join(',')}))`
+      );
     }
 
     const { data, error } = await query;
@@ -192,6 +203,8 @@ export const getPosts = async (
       console.log('No posts found');
       return [];
     }
+
+    console.log('Raw posts data:', data);
 
     // Get all mentioned user IDs from all posts
     const allMentionedUserIds = data
